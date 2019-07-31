@@ -1,6 +1,6 @@
--- MySQL dump 10.13  Distrib 8.0.16, for Win64 (x86_64)
+-- MySQL dump 10.13  Distrib 8.0.16, for Linux (x86_64)
 --
--- Host: 192.168.1.137    Database: cities
+-- Host: 192.168.43.40    Database: cities
 -- ------------------------------------------------------
 -- Server version	8.0.13
 
@@ -16,103 +16,88 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
--- Table structure for table `area`
+-- Table structure for table `_cities`
 --
 
-DROP TABLE IF EXISTS `area`;
+DROP TABLE IF EXISTS `_cities`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
  SET character_set_client = utf8mb4 ;
-CREATE TABLE `area` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `name` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+CREATE TABLE `_cities` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `country_id` int(11) NOT NULL,
+  `important` tinyint(1) NOT NULL,
+  `region_id` int(11) NOT NULL,
+  `title` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `name_UNIQUE` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `area`
---
-
-LOCK TABLES `area` WRITE;
-/*!40000 ALTER TABLE `area` DISABLE KEYS */;
-INSERT INTO `area` VALUES (1,'Barcelona'),(3,'Ibiza'),(4,'Los Angeles'),(2,'Madrid'),(5,'San Francisco');
-/*!40000 ALTER TABLE `area` ENABLE KEYS */;
-UNLOCK TABLES;
-
---
--- Table structure for table `city`
---
-
-DROP TABLE IF EXISTS `city`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
- SET character_set_client = utf8mb4 ;
-CREATE TABLE `city` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `name` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `name_UNIQUE` (`name`)
+  UNIQUE KEY `name_UNIQUE` (`title`),
+  KEY `region_fk` (`region_id`),
+  KEY `countries_fk_cities` (`country_id`),
+  CONSTRAINT `countries_fk_cities` FOREIGN KEY (`country_id`) REFERENCES `_countries` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `region_fk` FOREIGN KEY (`region_id`) REFERENCES `_regions` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `city`
+-- Dumping data for table `_cities`
 --
 
-LOCK TABLES `city` WRITE;
-/*!40000 ALTER TABLE `city` DISABLE KEYS */;
-INSERT INTO `city` VALUES (7,'Barcelona'),(9,'Ibiza'),(1,'Kazan'),(6,'Los Angeles'),(8,'Madrid'),(2,'Moscow'),(4,'New York'),(3,'Saint-Petersburg'),(5,'San Francisco');
-/*!40000 ALTER TABLE `city` ENABLE KEYS */;
+LOCK TABLES `_cities` WRITE;
+/*!40000 ALTER TABLE `_cities` DISABLE KEYS */;
+INSERT INTO `_cities` VALUES (1,1,0,1,'Kazan'),(2,1,0,2,'Moscow'),(3,1,0,3,'Saint-Petersburg'),(4,2,0,4,'New York'),(5,2,0,5,'San Francisco'),(6,2,0,5,'Los Angeles'),(7,3,0,6,'Barcelona'),(8,3,0,7,'Madrid'),(9,3,0,8,'Ibiza');
+/*!40000 ALTER TABLE `_cities` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
--- Table structure for table `country`
+-- Table structure for table `_countries`
 --
 
-DROP TABLE IF EXISTS `country`;
+DROP TABLE IF EXISTS `_countries`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
  SET character_set_client = utf8mb4 ;
-CREATE TABLE `country` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `name` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+CREATE TABLE `_countries` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `title` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `name_UNIQUE` (`name`)
+  UNIQUE KEY `title` (`title`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `country`
+-- Dumping data for table `_countries`
 --
 
-LOCK TABLES `country` WRITE;
-/*!40000 ALTER TABLE `country` DISABLE KEYS */;
-INSERT INTO `country` VALUES (1,'Russia'),(3,'Spain'),(2,'Usa');
-/*!40000 ALTER TABLE `country` ENABLE KEYS */;
+LOCK TABLES `_countries` WRITE;
+/*!40000 ALTER TABLE `_countries` DISABLE KEYS */;
+INSERT INTO `_countries` VALUES (1,'Russia'),(3,'Spain'),(2,'Usa');
+/*!40000 ALTER TABLE `_countries` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
--- Table structure for table `region`
+-- Table structure for table `_regions`
 --
 
-DROP TABLE IF EXISTS `region`;
+DROP TABLE IF EXISTS `_regions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
  SET character_set_client = utf8mb4 ;
-CREATE TABLE `region` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `name` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+CREATE TABLE `_regions` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `country_id` int(11) NOT NULL,
+  `title` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `name_UNIQUE` (`name`)
+  UNIQUE KEY `name_UNIQUE` (`title`),
+  KEY `countries_fk` (`country_id`),
+  CONSTRAINT `countries_fk` FOREIGN KEY (`country_id`) REFERENCES `_countries` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `region`
+-- Dumping data for table `_regions`
 --
 
-LOCK TABLES `region` WRITE;
-/*!40000 ALTER TABLE `region` DISABLE KEYS */;
-INSERT INTO `region` VALUES (8,'Balearic Islands'),(5,'California'),(6,'Catalonia'),(3,'Leningrad region'),(7,'Madrid'),(2,'Moscow region'),(4,'New York'),(1,'Tatarstan');
-/*!40000 ALTER TABLE `region` ENABLE KEYS */;
+LOCK TABLES `_regions` WRITE;
+/*!40000 ALTER TABLE `_regions` DISABLE KEYS */;
+INSERT INTO `_regions` VALUES (1,1,'Tatarstan'),(2,1,'Moscow region'),(3,1,'Leningrad region'),(4,2,'New York'),(5,2,'California'),(6,3,'Catalonia'),(7,3,'Madrid'),(8,3,'Balearic Islands');
+/*!40000 ALTER TABLE `_regions` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -124,4 +109,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2019-07-19  2:59:41
+-- Dump completed on 2019-07-23 19:21:54
