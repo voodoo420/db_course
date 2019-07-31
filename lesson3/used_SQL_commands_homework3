@@ -1,0 +1,51 @@
+#База данных «Страны и города мира»:
+
+#Сделать запрос, в котором мы выберем все данные о городе – регион, страна.
+
+SELECT `_cities`.`title`, `_regions`.`title`, `_countries`.`title` FROM `_cities`
+INNER JOIN `_countries` ON `_cities`.`country_id` = `_countries`.`id`
+INNER JOIN `_regions` ON `_cities`.`region_id` = `_regions`.`id`
+WHERE `_cities`.`title` REGEXP 'Moscow';
+
+#Выбрать все города из Московской области.
+
+ALTER TABLE `cities`.`_cities` 
+CHANGE COLUMN `important` `important` TINYINT(1) NOT NULL DEFAULT 0;
+
+INSERT INTO `_cities` 
+(`country_id`, `region_id`, `title`) VALUES
+('1', '2', 'Khimki'),
+('1', '2', 'Reutov'),
+('1', '2', 'Podolsk');
+
+SELECT `_cities`.`title`, `_regions`.`title`, `_countries`.`title` FROM `_cities`
+INNER JOIN `_countries` ON `_cities`.`country_id` = `_countries`.`id`
+INNER JOIN `_regions` ON `_cities`.`region_id` = `_regions`.`id`
+WHERE `_regions`.`title` LIKE 'Moscow%'; 
+
+
+#База данных «Сотрудники»:
+
+#Выбрать среднюю зарплату по отделам.
+SELECT `shtat`.`dep_id`, `depart`.`name`, 
+AVG(`shtat`.`salary`) FROM `shtat` 
+LEFT JOIN `depart` ON `shtat`.`dep_id` = `depart`.`id`
+GROUP by `dep_id`;
+
+#Выбрать максимальную зарплату у сотрудника.
+SELECT * FROM `shtat` WHERE `salary` = 
+(SELECT MAX(`salary`) FROM `shtat`);
+
+#Удалить одного сотрудника, у которого максимальная зарплата.
+DELETE FROM `shtat` ORDER BY `salary` DESC LIMIT 1;
+
+#Посчитать количество сотрудников во всех отделах.
+SELECT `dep_id` AS '№ отдела', COUNT(*) AS 'сотрудники' FROM  `shtat` GROUP by `dep_id`;
+
+#Найти количество сотрудников в отделах и посмотреть, сколько всего денег получает отдел.
+SELECT `shtat`.`dep_id` AS '№ отдела', 
+`depart`.`name` AS `отдел`,  
+COUNT(`shtat`.`id`) AS 'сотрудники', 
+SUM(`shtat`.`salary`) AS 'сумма' FROM `shtat`
+LEFT JOIN `depart` ON `shtat`.`dep_id` = `depart`.`id`
+GROUP by `dep_id`;
