@@ -21,13 +21,21 @@ SELECT * FROM `ttl_slr` WHERE `сотрудники` = 4;
 
 #2. Создать функцию, которая найдет менеджера по имени и фамилии.
 
-#ограничился только таким вариантом из-за нехватки времени
 CREATE FUNCTION `manager` (firstname VARCHAR(25), secondname VARCHAR(30))
 RETURNS INT
 READS SQL DATA 
 RETURN (SELECT `id` FROM `shtat` WHERE `name` = firstname, `lastname` = secondname); 
 
-SELECT `manager` ('Тарас', 'Голомозый');
+SELECT * FROM shtat WHERE id = (SELECT manager ('Тарас', 'Голомозый'));
+
+#процедура
+
+CREATE PROCEDURE `manager` (firstname VARCHAR(25), secondname VARCHAR(30))
+DETERMINISTIC
+READS SQL DATA
+SELECT * FROM `shtat` WHERE `name` = firstname AND `lastname` = secondname;
+
+CALL `manager` ('Тарас', 'Голомозый');
 
 
 #3. Создать триггер, который при добавлении нового сотрудника будет выплачивать ему вступительный бонус, занося запись об этом в таблицу salary.
