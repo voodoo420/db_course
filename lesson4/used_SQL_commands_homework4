@@ -1,0 +1,59 @@
+#1. Создать VIEW на основе запросов, которые вы сделали в ДЗ к уроку 3.
+
+CREATE VIEW `avg_slr` AS
+SELECT `shtat`.`dep_id`, `depart`.`name`, 
+AVG(`shtat`.`salary`) FROM `shtat` 
+LEFT JOIN `depart` ON `shtat`.`dep_id` = `depart`.`id`
+GROUP by `dep_id`;
+
+SELECT * FROM `avg_slr` WHERE `name` = 'Айти';
+
+CREATE VIEW `ttl_slr` AS
+SELECT `shtat`.`dep_id` AS '№ отдела', 
+`depart`.`name` AS `отдел`,  
+COUNT(`shtat`.`id`) AS 'сотрудники', 
+SUM(`shtat`.`salary`) AS 'сумма' FROM `shtat`
+LEFT JOIN `depart` ON `shtat`.`dep_id` = `depart`.`id`
+GROUP by `dep_id`;
+
+SELECT * FROM `ttl_slr` WHERE `сотрудники` = 4;
+
+
+#2. Создать функцию, которая найдет менеджера по имени и фамилии.
+
+CREATE FUNCTION `manager` (firstname VARCHAR(25), secondname VARCHAR(30))
+RETURNS INT
+READS SQL DATA 
+RETURN (SELECT `id` FROM `shtat` WHERE `name` = firstname, `lastname` = secondname); 
+
+SELECT * FROM shtat WHERE id = (SELECT manager ('Тарас', 'Голомозый'));
+
+#процедура
+
+CREATE PROCEDURE `manager` (firstname VARCHAR(25), secondname VARCHAR(30))
+DETERMINISTIC
+READS SQL DATA
+SELECT * FROM `shtat` WHERE `name` = firstname AND `lastname` = secondname;
+
+CALL `manager` ('Тарас', 'Голомозый');
+
+
+#3. Создать триггер, который при добавлении нового сотрудника будет выплачивать ему вступительный бонус, занося запись об этом в таблицу salary.
+
+CREATE TABLE IF NOT EXISTS `salary` (
+`id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+`date` DATE,
+`emp_id` INT NOT NULL,
+`pay` INT NOT NULL
+);
+
+CREATE TRIGGER `bonus`
+AFTER INSERT ON `shtat`
+FOR EACH ROW
+INSERT INTO `salary` (`date`,`emp_id`,`pay`) VALUES (NOW(), NEW.id, 10000);
+
+INSERT INTO `shtat` 
+(`name`,`lastname`,`dep_id`,`salary`) VALUES
+('Анна','Иванова',1,25000),
+('Алена','Петрова',2,45000);
+
