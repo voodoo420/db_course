@@ -1,0 +1,524 @@
+﻿
+# http://dev.mysql.com/doc/mysql/en/server-system-variables.html
+
+
+
+# сначала нужно узнать ip-адрес виртуальной машины
+root@MySQL8:~# ip a
+
+    inet 192.168.3.49
+
+
+в основном конфигурационном файле на линукс ( /etc/mysql/my.cnf ) должна присутствовать строка:
+!includedir /etc/mysql/conf.d/
+
+в этой папке (/etc/mysql/conf.d/) можно создавать дополнительные файлы конфигурации с произвольными именами
+
+или для windows
+MySQL v5.7:
+C:\ProgramData\MySQL\MySQL Server 5.7\my.ini
+MySQL v8.0:
+C:\Program Files\MySQL\MySQL Server 8.0\my.ini
+
+
+https://dev.mysql.com/doc/refman/8.0/en/option-files.html
+
+
+для windows дополнительные файлы создавать не нужно, правки вносят в основной конфигурационный файл, который может находиться в любой из указанных ниже директорий.
+сила файлов в порядке убывания
+Default options are read from the following files in the given order:
+C:\WINDOWS\my.ini 
+C:\WINDOWS\my.cnf 
+C:\my.ini 
+C:\my.cnf 
+C:\Program Files\MySQL\MySQL Server 8.0\my.ini 
+C:\Program Files\MySQL\MySQL Server 8.0\my.cnf
+
+
+---
+
+
+1) конфигурируем master
+
+[mysqld]
+
+# id сервера в рамках одного кластера строго уникален
+server-id = 1
+
+# bin log (имя файла произвольное)
+log_bin = /var/log/mysql/bin.log
+
+# bases (binlog_do_db - реплицируемые базы или binlog_ignore_db - игнорируемые)
+#binlog_ignore_db = mysql, phpmyadmin, sys
+binlog_do_db = lesson3
+
+
+после изменения конфига перезапустить сервер командой
+service mysql restart
+
+
+---
+
+
+2) выполняем SQL-команды на мастере
+
+root@MySQL8:~# mysql -u root -p
+Enter password: ******
+
+mysql> GRANT REPLICATION SLAVE ON *.* TO 'root'@'%';
+Query OK, 0 rows affected (0,01 sec)
+
+mysql> FLUSH PRIVILEGES;
+Query OK, 0 rows affected (0,02 sec)
+
+mysql> SHOW MASTER STATUS;
++------------+----------+--------------+------------------+-------------------+
+| File       | Position | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set |
++------------+----------+--------------+------------------+-------------------+
+| bin.000024 |      538 | lesson3      |                  |                   |
++------------+----------+--------------+------------------+-------------------+
+1 row in set (0,00 sec)
+
+mysql> quit
+Bye
+
+
+---
+
+
+3) не забывайте слить дамп нужной базы
+root@MySQL8:~# mysqldump -u root -p123123 lesson3 --routines > /var/0608dump.sql
+
+
+---
+
+
+4) конфигурируем slave
+
+[mysqld]
+
+# id сервера в рамках одного кластера строго уникален
+server-id = 2
+
+# bin log (имя файла как на мастере)
+log_bin = log.bin
+
+# базы для репликации (точно такие же как на мастере)
+binlog_do_db = lesson3
+
+# relay log (имя файла произвольное)
+relay-log = /var/log/mysql/relay.log
+
+
+---
+
+
+5) загружаем копию нужной базы на подчиненный сервер
+root@MySQL8:~# mysql -u root -p123123 lesson3 < /var/0608dump.sql
+
+
+---
+
+
+6) выполняем SQL-команды на подчиненном сервере
+
+root@MySQL8:~# mysql -u root -p123123
+
+mysql> STOP SLAVE;
+Query OK, 0 rows affected, 1 warning (0,00 sec)
+
+mysql> RESET SLAVE;
+Query OK, 0 rows affected (0,00 sec)
+
+mysql> CHANGE MASTER TO MASTER_HOST='192.168.3.49', MASTER_USER='root', MASTER_PASSWORD='123123', MASTER_LOG_FILE='bin.000024', MASTER_LOG_POS=538;
+Query OK, 0 rows affected, 2 warnings (0,16 sec)
+
+mysql> START SLAVE;
+Query OK, 0 rows affected (0,06 sec)
+
+mysql> SHOW SLAVE STATUS \G
+*************************** 1. row ***************************
+               Slave_IO_State: Waiting for master to send event
+                  Master_Host: 192.168.3.49
+                  Master_User: root
+                  Master_Port: 3306
+                Connect_Retry: 60
+              Master_Log_File: bin.000024
+          Read_Master_Log_Pos: 538
+               Relay_Log_File: relay.000002
+                Relay_Log_Pos: 316
+        Relay_Master_Log_File: bin.000024
+             Slave_IO_Running: Yes
+            Slave_SQL_Running: Yes
+              Replicate_Do_DB:
+          Replicate_Ignore_DB:
+           Replicate_Do_Table:
+       Replicate_Ignore_Table:
+      Replicate_Wild_Do_Table:
+  Replicate_Wild_Ignore_Table:
+                   Last_Errno: 0
+                   Last_Error:
+                 Skip_Counter: 0
+          Exec_Master_Log_Pos: 538
+              Relay_Log_Space: 514
+              Until_Condition: None
+               Until_Log_File:
+                Until_Log_Pos: 0
+           Master_SSL_Allowed: No
+           Master_SSL_CA_File:
+           Master_SSL_CA_Path:
+              Master_SSL_Cert:
+            Master_SSL_Cipher:
+               Master_SSL_Key:
+        Seconds_Behind_Master: 0
+Master_SSL_Verify_Server_Cert: No
+                Last_IO_Errno: 0
+                Last_IO_Error:
+               Last_SQL_Errno: 0
+               Last_SQL_Error:
+  Replicate_Ignore_Server_Ids:
+             Master_Server_Id: 1
+                  Master_UUID: 3a90a3b6-f1ab-11e8-8365-080027ad0e39
+             Master_Info_File: mysql.slave_master_info
+                    SQL_Delay: 0
+          SQL_Remaining_Delay: NULL
+      Slave_SQL_Running_State: Slave has read all relay log; waiting for more updates
+           Master_Retry_Count: 86400
+                  Master_Bind:
+      Last_IO_Error_Timestamp:
+     Last_SQL_Error_Timestamp:
+               Master_SSL_Crl:
+           Master_SSL_Crlpath:
+           Retrieved_Gtid_Set:
+            Executed_Gtid_Set:
+                Auto_Position: 0
+         Replicate_Rewrite_DB:
+                 Channel_Name:
+           Master_TLS_Version:
+       Master_public_key_path:
+        Get_master_public_key: 0
+1 row in set (0,00 sec)
+
+в результате выполнения команды не должно быть никаких ошибок
+
+ошибка
+Fatal error: The slave I/O thread stops because master and slave have equal MySQL server UUIDs; these UUIDs must be different for replication to work.
+
+лечится удалением файла 
+/var/lib/mysql/auto.cnf
+
+или (для windows)
+C:\ProgramData\MySQL\MySQL Server 5.7\Data\auto.cnf
+и перезапуском сервера
+
+можно сделать это двумя командами в терминале:
+mv /var/lib/mysql/auto.cnf /var/lib/mysql/auto.cnf.bak
+service mysql restart
+
+
+бывает что не меняется server_id подчиненного сервера (очевидно, какой-то глюк) можно поменять его командой
+SET GLOBAL server_id=2;
+
+проверить значение server_id можно командой 
+SHOW VARIABLES LIKE 'server_id';
+
+для проверки репликации можно посмотреть лог в папке 
+/var/log/mysql/
+
+в логе должно быть что-то подобное:
+2019-06-08T20:28:20.906395Z 9 [System] [MY-010562] [Repl] Slave I/O thread for channel '': connected to master 'root@192.168.3.120:3306',replication started in log 'bin.000024' at position 538
+
+
+---
+
+
+7) проверяем репликацию
+
+# на мастере (или на слейве) смотрим таблицу depart
+
+root@MySQL8:~# mysql -u root -p123123
+
+mysql> SELECT * FROM `lesson3`.`depart`;
++----+-----------------------------------+-------+---------+
+| id | name                              | count | head_id |
++----+-----------------------------------+-------+---------+
+|  1 | айти                              |     3 |    NULL |
+|  2 | Бухгалтерия                       |     0 |    NULL |
+|  3 | Маркетинг                         |     0 |    NULL |
+|  4 | Столовая                          |     0 |    NULL |
+|  5 | Охрана                            |     0 |    NULL |
+|  6 | Реклама                           |     0 |    NULL |
+|  7 | Контроль кач-ва                   |     0 |    NULL |
+|  8 | HR                                |     0 |    NULL |
+|  9 | Отдел образования                 |     0 |    NULL |
++----+-----------------------------------+-------+---------+
+9 rows in set (0,00 sec)
+
+mysql>
+
+
+# на мастере выполняем команду
+mysql> INSERT INTO `depart` (name) VALUE ('Отдел образования');
+Query OK, 1 row affected (0,06 sec)
+
+
+# снова на слейве смотрим таблицу
+mysql> SELECT * FROM `depart`;
+
++----+-----------------------------------+-------+---------+
+| id | name                              | count | head_id |
++----+-----------------------------------+-------+---------+
+|  1 | айти                              |     3 |    NULL |
+|  2 | Бухгалтерия                       |     0 |    NULL |
+|  3 | Маркетинг                         |     0 |    NULL |
+|  4 | Столовая                          |     0 |    NULL |
+|  5 | Охрана                            |     0 |    NULL |
+|  6 | Реклама                           |     0 |    NULL |
+|  7 | Контроль кач-ва                   |     0 |    NULL |
+|  8 | HR                                |     0 |    NULL |
+|  9 | Отдел образования                 |     0 |    NULL |
++----+-----------------------------------+-------+---------+
+
+9 rows in set (0,00 sec)
+
+
+
+теперь все операции на изменение данных выполняемые на мастере будут автоматически повторяться на слейве.
+
+
+mysql> quit
+Bye
+
+
+
+--- MongoDB
+
+root@MySQL8:~# apt-get install mongodb-org
+Чтение списков пакетов… Готово
+Построение дерева зависимостей       
+Чтение информации о состоянии… Готово
+Уже установлен пакет mongodb-org самой новой версии (4.0.4).
+
+
+root@MySQL8:~# service mongod start
+
+root@MySQL8:~# service mongod restart
+
+root@MySQL8:~# mongo
+
+> use august
+switched to db august
+
+> db.august.insert({"name":"Tapac"})
+WriteResult({ "nInserted" : 1 })
+
+> db.august.insert({"name":"Tapac", "ln":"Gol", "dept":"it", "sal":25000})
+WriteResult({ "nInserted" : 1 })
+
+> db.august.find()
+{ "_id" : ObjectId("5d49cf1dfbdeac43da6816a1"), "name" : "Tapac" }
+{ "_id" : ObjectId("5d49cf94fbdeac43da6816a2"), "name" : "Tapac", "ln" : "Gol", "dept" : "it", "sal" : 25000 }
+
+> db.august.insert({"name":"Alena", "ln":"Zv", "dept":"it", "sal":35000})
+WriteResult({ "nInserted" : 1 })
+
+> db.august.insert({"name":"Vl", "ln":"Pit", "dept":"it", "sal":45000})
+WriteResult({ "nInserted" : 1 })
+
+> db.august.insert({"name":"Sv", "ln":"Muz", "dept":"acc", "sal":55000})
+WriteResult({ "nInserted" : 1 })
+
+> db.august.insert({"name":"Ant", "ln":"Pol", "dept":"acc", "sal":60000})
+WriteResult({ "nInserted" : 1 })
+
+> db.august.find()
+{ "_id" : ObjectId("5d49cf1dfbdeac43da6816a1"), "name" : "Tapac" }
+{ "_id" : ObjectId("5d49cf94fbdeac43da6816a2"), "name" : "Tapac", "ln" : "Gol", "dept" : "it", "sal" : 25000 }
+{ "_id" : ObjectId("5d49cfbffbdeac43da6816a3"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d49cfcefbdeac43da6816a4"), "name" : "Vl", "ln" : "Pit", "dept" : "it", "sal" : 45000 }
+{ "_id" : ObjectId("5d49cfddfbdeac43da6816a5"), "name" : "Sv", "ln" : "Muz", "dept" : "acc", "sal" : 55000 }
+{ "_id" : ObjectId("5d49cfebfbdeac43da6816a6"), "name" : "Ant", "ln" : "Pol", "dept" : "acc", "sal" : 60000 }
+
+> db.august.insert({"name":"Andr", "ln":"U", "dept":"acc", "sal":77000, "pos":"head"})
+WriteResult({ "nInserted" : 1 })
+
+> db.august.find()
+{ "_id" : ObjectId("5d49cf1dfbdeac43da6816a1"), "name" : "Tapac" }
+{ "_id" : ObjectId("5d49cf94fbdeac43da6816a2"), "name" : "Tapac", "ln" : "Gol", "dept" : "it", "sal" : 25000 }
+{ "_id" : ObjectId("5d49cfbffbdeac43da6816a3"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d49cfcefbdeac43da6816a4"), "name" : "Vl", "ln" : "Pit", "dept" : "it", "sal" : 45000 }
+{ "_id" : ObjectId("5d49cfddfbdeac43da6816a5"), "name" : "Sv", "ln" : "Muz", "dept" : "acc", "sal" : 55000 }
+{ "_id" : ObjectId("5d49cfebfbdeac43da6816a6"), "name" : "Ant", "ln" : "Pol", "dept" : "acc", "sal" : 60000 }
+{ "_id" : ObjectId("5d49d027fbdeac43da6816a7"), "name" : "Andr", "ln" : "U", "dept" : "acc", "sal" : 77000, "pos" : "head" }
+
+> db.august.find({"_id" : ObjectId("5d49cf1dfbdeac43da6816a1")})
+{ "_id" : ObjectId("5d49cf1dfbdeac43da6816a1"), "name" : "Tapac" }
+
+> db.august.find({"name" : "Tapac"})
+{ "_id" : ObjectId("5d49cf1dfbdeac43da6816a1"), "name" : "Tapac" }
+{ "_id" : ObjectId("5d49cf94fbdeac43da6816a2"), "name" : "Tapac", "ln" : "Gol", "dept" : "it", "sal" : 25000 }
+
+> db.august.find({"pos":{$exists:true}})
+{ "_id" : ObjectId("5d49d027fbdeac43da6816a7"), "name" : "Andr", "ln" : "U", "dept" : "acc", "sal" : 77000, "pos" : "head" }
+
+> db.august.find({"pos":{$exists:false}})
+{ "_id" : ObjectId("5d49cf1dfbdeac43da6816a1"), "name" : "Tapac" }
+{ "_id" : ObjectId("5d49cf94fbdeac43da6816a2"), "name" : "Tapac", "ln" : "Gol", "dept" : "it", "sal" : 25000 }
+{ "_id" : ObjectId("5d49cfbffbdeac43da6816a3"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d49cfcefbdeac43da6816a4"), "name" : "Vl", "ln" : "Pit", "dept" : "it", "sal" : 45000 }
+{ "_id" : ObjectId("5d49cfddfbdeac43da6816a5"), "name" : "Sv", "ln" : "Muz", "dept" : "acc", "sal" : 55000 }
+{ "_id" : ObjectId("5d49cfebfbdeac43da6816a6"), "name" : "Ant", "ln" : "Pol", "dept" : "acc", "sal" : 60000 }
+
+> db.august.find({"sal":{$gt:50000}})
+{ "_id" : ObjectId("5d49cfddfbdeac43da6816a5"), "name" : "Sv", "ln" : "Muz", "dept" : "acc", "sal" : 55000 }
+{ "_id" : ObjectId("5d49cfebfbdeac43da6816a6"), "name" : "Ant", "ln" : "Pol", "dept" : "acc", "sal" : 60000 }
+{ "_id" : ObjectId("5d49d027fbdeac43da6816a7"), "name" : "Andr", "ln" : "U", "dept" : "acc", "sal" : 77000, "pos" : "head" }
+
+> db.august.find({"sal":{$lt:40000}})
+{ "_id" : ObjectId("5d49cf94fbdeac43da6816a2"), "name" : "Tapac", "ln" : "Gol", "dept" : "it", "sal" : 25000 }
+{ "_id" : ObjectId("5d49cfbffbdeac43da6816a3"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+
+> db.august.find({"sal":{$in:[40000, 5000, 50000, 25000]}})
+{ "_id" : ObjectId("5d49cf94fbdeac43da6816a2"), "name" : "Tapac", "ln" : "Gol", "dept" : "it", "sal" : 25000 }
+
+> db.august.find({"name":{$regex:"^A"}})
+{ "_id" : ObjectId("5d49cfbffbdeac43da6816a3"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d49cfebfbdeac43da6816a6"), "name" : "Ant", "ln" : "Pol", "dept" : "acc", "sal" : 60000 }
+{ "_id" : ObjectId("5d49d027fbdeac43da6816a7"), "name" : "Andr", "ln" : "U", "dept" : "acc", "sal" : 77000, "pos" : "head" }
+
+> db.august.update({"name" : "Tapac"},{$set:{"dept":"sec"}})
+WriteResult({ "nMatched" : 1, "nUpserted" : 0, "nModified" : 1 })
+
+> db.august.find()
+{ "_id" : ObjectId("5d49cf1dfbdeac43da6816a1"), "name" : "Tapac", "dept" : "sec" }
+{ "_id" : ObjectId("5d49cf94fbdeac43da6816a2"), "name" : "Tapac", "ln" : "Gol", "dept" : "it", "sal" : 25000 }
+{ "_id" : ObjectId("5d49cfbffbdeac43da6816a3"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d49cfcefbdeac43da6816a4"), "name" : "Vl", "ln" : "Pit", "dept" : "it", "sal" : 45000 }
+{ "_id" : ObjectId("5d49cfddfbdeac43da6816a5"), "name" : "Sv", "ln" : "Muz", "dept" : "acc", "sal" : 55000 }
+{ "_id" : ObjectId("5d49cfebfbdeac43da6816a6"), "name" : "Ant", "ln" : "Pol", "dept" : "acc", "sal" : 60000 }
+{ "_id" : ObjectId("5d49d027fbdeac43da6816a7"), "name" : "Andr", "ln" : "U", "dept" : "acc", "sal" : 77000, "pos" : "head" }
+
+> db.august.update({"name" : "Tapac"},{$set:{"dept":"sec"}}, true, true)
+WriteResult({ "nMatched" : 2, "nUpserted" : 0, "nModified" : 1 })
+
+> db.august.find()
+{ "_id" : ObjectId("5d49cf1dfbdeac43da6816a1"), "name" : "Tapac", "dept" : "sec" }
+{ "_id" : ObjectId("5d49cf94fbdeac43da6816a2"), "name" : "Tapac", "ln" : "Gol", "dept" : "sec", "sal" : 25000 }
+{ "_id" : ObjectId("5d49cfbffbdeac43da6816a3"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d49cfcefbdeac43da6816a4"), "name" : "Vl", "ln" : "Pit", "dept" : "it", "sal" : 45000 }
+{ "_id" : ObjectId("5d49cfddfbdeac43da6816a5"), "name" : "Sv", "ln" : "Muz", "dept" : "acc", "sal" : 55000 }
+{ "_id" : ObjectId("5d49cfebfbdeac43da6816a6"), "name" : "Ant", "ln" : "Pol", "dept" : "acc", "sal" : 60000 }
+{ "_id" : ObjectId("5d49d027fbdeac43da6816a7"), "name" : "Andr", "ln" : "U", "dept" : "acc", "sal" : 77000, "pos" : "head" }
+
+> db.august.update({"name" : "Tapac"},{$unset:{"dept":"sec"}}, true, true)
+WriteResult({ "nMatched" : 2, "nUpserted" : 0, "nModified" : 2 })
+
+> db.august.find()
+{ "_id" : ObjectId("5d49cf1dfbdeac43da6816a1"), "name" : "Tapac" }
+{ "_id" : ObjectId("5d49cf94fbdeac43da6816a2"), "name" : "Tapac", "ln" : "Gol", "sal" : 25000 }
+{ "_id" : ObjectId("5d49cfbffbdeac43da6816a3"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d49cfcefbdeac43da6816a4"), "name" : "Vl", "ln" : "Pit", "dept" : "it", "sal" : 45000 }
+{ "_id" : ObjectId("5d49cfddfbdeac43da6816a5"), "name" : "Sv", "ln" : "Muz", "dept" : "acc", "sal" : 55000 }
+{ "_id" : ObjectId("5d49cfebfbdeac43da6816a6"), "name" : "Ant", "ln" : "Pol", "dept" : "acc", "sal" : 60000 }
+{ "_id" : ObjectId("5d49d027fbdeac43da6816a7"), "name" : "Andr", "ln" : "U", "dept" : "acc", "sal" : 77000, "pos" : "head" }
+
+> db.august.update({"name" : "Vl"},{$rename:{"pos":"position"}}, true, true)
+WriteResult({ "nMatched" : 1, "nUpserted" : 0, "nModified" : 0 })
+
+> db.august.find()
+{ "_id" : ObjectId("5d49cf1dfbdeac43da6816a1"), "name" : "Tapac" }
+{ "_id" : ObjectId("5d49cf94fbdeac43da6816a2"), "name" : "Tapac", "ln" : "Gol", "sal" : 25000 }
+{ "_id" : ObjectId("5d49cfbffbdeac43da6816a3"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d49cfcefbdeac43da6816a4"), "name" : "Vl", "ln" : "Pit", "dept" : "it", "sal" : 45000 }
+{ "_id" : ObjectId("5d49cfddfbdeac43da6816a5"), "name" : "Sv", "ln" : "Muz", "dept" : "acc", "sal" : 55000 }
+{ "_id" : ObjectId("5d49cfebfbdeac43da6816a6"), "name" : "Ant", "ln" : "Pol", "dept" : "acc", "sal" : 60000 }
+{ "_id" : ObjectId("5d49d027fbdeac43da6816a7"), "name" : "Andr", "ln" : "U", "dept" : "acc", "sal" : 77000, "pos" : "head" }
+
+> db.august.update({"name" : "Andr"},{$rename:{"pos":"position"}}, true, true)
+WriteResult({ "nMatched" : 1, "nUpserted" : 0, "nModified" : 1 })
+
+> db.august.find()
+{ "_id" : ObjectId("5d49cf1dfbdeac43da6816a1"), "name" : "Tapac" }
+{ "_id" : ObjectId("5d49cf94fbdeac43da6816a2"), "name" : "Tapac", "ln" : "Gol", "sal" : 25000 }
+{ "_id" : ObjectId("5d49cfbffbdeac43da6816a3"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d49cfcefbdeac43da6816a4"), "name" : "Vl", "ln" : "Pit", "dept" : "it", "sal" : 45000 }
+{ "_id" : ObjectId("5d49cfddfbdeac43da6816a5"), "name" : "Sv", "ln" : "Muz", "dept" : "acc", "sal" : 55000 }
+{ "_id" : ObjectId("5d49cfebfbdeac43da6816a6"), "name" : "Ant", "ln" : "Pol", "dept" : "acc", "sal" : 60000 }
+{ "_id" : ObjectId("5d49d027fbdeac43da6816a7"), "name" : "Andr", "ln" : "U", "dept" : "acc", "sal" : 77000, "position" : "head" }
+
+
+> db.august.remove({"_id" : ObjectId("5d49cfddfbdeac43da6816a5")})
+WriteResult({ "nRemoved" : 1 })
+
+> db.august.find()
+{ "_id" : ObjectId("5d49cf1dfbdeac43da6816a1"), "name" : "Tapac" }
+{ "_id" : ObjectId("5d49cf94fbdeac43da6816a2"), "name" : "Tapac", "ln" : "Gol", "sal" : 25000 }
+{ "_id" : ObjectId("5d49cfbffbdeac43da6816a3"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d49cfcefbdeac43da6816a4"), "name" : "Vl", "ln" : "Pit", "dept" : "it", "sal" : 45000 }
+{ "_id" : ObjectId("5d49cfebfbdeac43da6816a6"), "name" : "Ant", "ln" : "Pol", "dept" : "acc", "sal" : 60000 }
+{ "_id" : ObjectId("5d49d027fbdeac43da6816a7"), "name" : "Andr", "ln" : "U", "dept" : "acc", "sal" : 77000, "position" : "head" }
+
+> db.august.find().pretty()
+{ "_id" : ObjectId("5d49cf1dfbdeac43da6816a1"), "name" : "Tapac" }
+{
+	"_id" : ObjectId("5d49cf94fbdeac43da6816a2"),
+	"name" : "Tapac",
+	"ln" : "Gol",
+	"sal" : 25000
+}
+{
+	"_id" : ObjectId("5d49cfbffbdeac43da6816a3"),
+	"name" : "Alena",
+	"ln" : "Zv",
+	"dept" : "it",
+	"sal" : 35000
+}
+{
+	"_id" : ObjectId("5d49cfcefbdeac43da6816a4"),
+	"name" : "Vl",
+	"ln" : "Pit",
+	"dept" : "it",
+	"sal" : 45000
+}
+{
+	"_id" : ObjectId("5d49cfebfbdeac43da6816a6"),
+	"name" : "Ant",
+	"ln" : "Pol",
+	"dept" : "acc",
+	"sal" : 60000
+}
+{
+	"_id" : ObjectId("5d49d027fbdeac43da6816a7"),
+	"name" : "Andr",
+	"ln" : "U",
+	"dept" : "acc",
+	"sal" : 77000,
+	"position" : "head"
+}
+
+
+> db.august.drop()
+true
+
+> show dbs
+admin     0.000GB
+config    0.000GB
+local     0.000GB
+testtest  0.000GB
+
+
+
+---
+
+
+# скачать MongoDB
+https://www.mongodb.com/download-center/community
+
+# репликация MongoDB
+https://docs.mongodb.com/manual/replication/
+
+# транзакции MongoDB
+https://docs.mongodb.com/master/core/transactions/
+
+# зависимости в MongoDB
+https://docs.mongodb.com/v4.0/reference/database-references/

@@ -1,0 +1,97 @@
+﻿# создаем схему lesson2
+CREATE SCHEMA IF NOT EXISTS `lesson2`;
+
+# удаляем схему lesson2
+DROP SCHEMA IF EXISTS `lesson2`;
+
+# создаем схему lesson2 с указанной кодировкой
+CREATE DATABASE IF NOT EXISTS `lesson2` 
+DEFAULT CHAR SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+# выбираем схему lesson2 для дальнейшей работы
+USE `lesson2`;
+
+# создаем таблицу depart в выбранной схеме
+CREATE TABLE IF NOT EXISTS `depart` (
+`id` INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+`name` VARCHAR(40) NOT NULL,
+`count` INT DEFAULT 0,
+`head_id` INT
+);
+
+# создаем таблицу shtat в выбранной схеме с указанной кодировкой
+CREATE TABLE IF NOT EXISTS `shtat` (
+`id` INT NOT NULL AUTO_INCREMENT,
+`name` VARCHAR(25) NOT NULL,
+`lastname` VARCHAR(30) NOT NULL,
+`dep_id` INT NOT NULL,
+`salary` INT NOT NULL,
+PRIMARY KEY (`id`),
+UNIQUE INDEX (`name`, `lastname`)
+) DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+
+---
+
+
+# изменяем таблицу shtat (добавляем колоку position после dep_id)
+ALTER TABLE `shtat` ADD COLUMN `position` VARCHAR(50) AFTER `dep_id`;
+
+# просмотр всех индексов в таблице shtat
+SHOW INDEX FROM `shtat`;
+
+# изменяем таблицу shtat (добавляем индекс)
+ALTER TABLE `shtat` ADD INDEX `pos_idx`(`position`);
+
+# изменяем таблицу shtat (удаляем индекс)
+ALTER TABLE `shtat` DROP INDEX `pos_idx`;
+
+# другой способ создания индекса
+CREATE INDEX `pos_idx` ON `shtat`(`position`);
+
+# изменяем таблицу shtat (добавляем колоку birthday, переименовываем position, удаляем индекс name)
+ALTER TABLE `shtat`
+ADD COLUMN `birthday` DATE AFTER `lastname`,
+RENAME COLUMN `position` TO `pos`,
+DROP INDEX `name`;
+
+
+# изменяем схему lesson2 (меняем кодировку по умолчанию)
+ALTER SCHEMA `lesson2` DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+# изменяем таблицу shtat (меняем кодировку по умолчанию)
+ALTER TABLE `depart` DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+# изменяем таблицу shtat (конвертируем кодировку)
+ALTER TABLE `depart` CONVERT TO CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+# изменяем таблицу depart (меняем колоку name)
+ALTER TABLE `depart` CHANGE COLUMN `name` `title` TEXT(140) AFTER `count`;
+
+
+# изменяем таблицу shtat (добавляем внешний ключ)
+ALTER TABLE `shtat`
+ADD CONSTRAINT `dept_fk` FOREIGN KEY (`dep_id`)
+REFERENCES `depart`(`id`)
+ON UPDATE CASCADE
+ON DELETE RESTRICT;
+
+
+# удаляем таблицу shtat
+DROP TABLE IF EXISTS `shtat`;
+
+# очищаем таблицу depart
+TRUNCATE TABLE `depart`;
+
+# удаляем схему lesson2
+DROP DATABASE `lesson2`;
+
+
+---
+
+
+# создание таблиц в MySQL
+https://dev.mysql.com/doc/refman/8.0/en/create-table.html
+
+# изменение структуры существующих таблиц в MySQL
+https://dev.mysql.com/doc/refman/8.0/en/alter-table.html

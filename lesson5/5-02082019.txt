@@ -1,0 +1,250 @@
+﻿USE `lesson3`;
+
+# создаем простое представление
+CREATE VIEW `names` AS
+SELECT `name`, `lastname`  FROM `shtat`;
+
+
+UPDATE `lesson3`.`shtat` SET `position` = 'Менеджер' WHERE (`id` = '611');
+UPDATE `lesson3`.`shtat` SET `position` = 'Менеджер' WHERE (`id` = '2');
+
+# создаем функцию которая находит id менеджера по имени и фамилии
+CREATE FUNCTION `manager` (emp_name VARCHAR(25), emp_lastname VARCHAR(30))
+RETURNS INT DETERMINISTIC
+READS SQL DATA
+RETURN(SELECT `id` FROM `shtat` WHERE `name` = emp_name AND `lastname` = emp_lastname AND `position` = 'Менеджер' LIMIT 1);
+
+# проверяем функцию
+SELECT `manager`('Владимир','Питерский');
+
+# выводим всю инфорацию о сотруднике
+SELECT * FROM `shtat` WHERE `id` = (SELECT `manager`('Владимир','Питерский'));
+
+# то же самое без функции работает медленнее
+SELECT `id` FROM `shtat` 
+WHERE `name` = 'Владимир' AND `lastname` LIKE 'Питерский' AND `position` LIKE 'Менеджер' LIMIT 1;
+
+# создаем функцию которая находит всю информацию о менеджере
+DROP FUNCTION `manager`;
+CREATE FUNCTION `manager` (emp_name VARCHAR(25), emp_lastname VARCHAR(30))
+RETURNS VARCHAR(250) DETERMINISTIC
+READS SQL DATA
+RETURN(SELECT CONCAT(`id`, `name`,`lastname`,`dep_id`,`salary`,`position`) FROM `shtat` WHERE `name` = emp_name AND `lastname` = emp_lastname AND `position` = 'Менеджер' LIMIT 1);
+
+# проверяем функцию
+SELECT `manager`('Владимир','Питерский');
+
+
+---
+
+
+# создаем процедуру которая находит всю инфорацию о сотруднике по имени и фамилии
+CREATE PROCEDURE `manager` (emp_name VARCHAR(25), emp_lastname VARCHAR(30))
+DETERMINISTIC
+READS SQL DATA
+SELECT * FROM `shtat` WHERE `name` = emp_name AND `lastname` = emp_lastname AND `position` = 'Менеджер';
+
+# проверяем процедуру
+CALL `manager`('Владимир','Питерский');
+
+
+---
+
+# так можно создать полную структурную копию таблицы dates, но это сейчас не нужно
+CREATE TABLE IF NOT EXISTS `salary` LIKE `dates`;
+
+# смотрим скрипт создания таблицы dates
+SHOW CREATE TABLE `dates`;
+
+# создаем таблицу salary на сонове этого скрипта (экономим время)
+CREATE TABLE `salary` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `emp_id` int(11) NOT NULL,
+  `paydate` date NOT NULL,
+  `payoff` INT,
+  `comment` VARCHAR(250),
+  PRIMARY KEY (`id`)
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+# создаем триггер который выплачивает половину зп каждому новому сотруднику
+delimiter $$
+
+CREATE TRIGGER `salary` 
+AFTER INSERT ON `shtat`
+FOR EACH ROW
+BEGIN
+INSERT INTO `salary` 
+(`emp_id`,`paydate`,`payoff`,`comment`) VALUES
+(NEW.id, CURDATE(),NEW.salary/2, 'добро пожаловать');
+UPDATE `depart` SET `count` = `count` + 1 WHERE NEW.dep_id = `depart`.`id`;
+END$$
+
+delimiter ;
+
+
+# вставляем в таблицу depart строки для проверки триггера
+INSERT INTO `shtat` 
+(`name`,`lastname`,`dep_id`,`salary`) VALUES 
+('Валерий','Шансонов',1,60000);
+
+
+# смотрим таблицу salary
+SELECT * FROM `salary`;
++----+--------+------------+--------+-----------------------------------------+
+| id | emp_id | paydate    | payoff | comment                                 |
++----+--------+------------+--------+-----------------------------------------+
+|  1 |    613 | 2019-08-02 |  30000 | добро пожаловать                        |
++----+--------+------------+--------+-----------------------------------------+
+
+
+---
+
+
+# находим точное название переменной autocommit
+SHOW VARIABLES LIKE 'autocommit';
+
+# выключаем автокоммиты
+SET AUTOCOMMIT = 0;
+
+# находим точное название переменной transaction_isolation
+SHOW VARIABLES LIKE '%transaction%';
+
+# выставляем нужный уровень изоляций
+SET transaction_isolation = SERIALIZABLE;
+
+# создаем транзакцию которая доплачивает бонус сотруднику с мин зп до средней
+BEGIN;
+SET @x := (SELECT MIN(`salary`) FROM `shtat`);
+SET @y := (SELECT AVG(`salary`) FROM `shtat`);
+SET @z := (SELECT `id` FROM `shtat` WHERE `salary` = @x);
+INSERT INTO `salary` 
+(`emp_id`,`paydate`,`payoff`,`comment`) VALUES 
+(@z, CURDATE(), @y - @x, 'доплата до средней зп');
+COMMIT;
+
+
+---
+
+# логинимся в консольный клиент mysql
+root@MySQL8:~# mysql -u root -p
+Enter password: ******
+
+# смотрим какие на сервере есть базы
+mysql> SHOW DATABASES;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| lesson2            |
+| lesson3            |
+| mysql              |
+| performance_schema |
+| phpmyadmin         |
+| sys                |
++--------------------+
+7 rows in set (0,00 sec)
+
+# выбираем lesson3
+mysql> USE `lesson3`;
+Database changed
+
+mysql> SELECT * FROM `salary`;
++----+--------+------------+--------+-----------------------------------------+
+| id | emp_id | paydate    | payoff | comment                                 |
++----+--------+------------+--------+-----------------------------------------+
+|  1 |    613 | 2019-08-02 |  30000 | добро пожаловать                        |
+|  2 |    615 | 2019-08-02 |  30000 | добро пожаловать                        |
+|  3 |    616 | 2019-08-02 |  17500 | добро пожаловать                        |
+|  4 |    616 | 2019-08-02 |  10000 | NULL                                    |
+|  5 |    609 | 2019-08-02 |  20000 | доплата до средней зп                   |
++----+--------+------------+--------+-----------------------------------------+
+5 rows in set (0,00 sec)
+
+# анализируем таблицу
+mysql> EXPLAIN `salary`;
++---------+--------------+------+-----+---------+----------------+
+| Field   | Type         | Null | Key | Default | Extra          |
++---------+--------------+------+-----+---------+----------------+
+| id      | int(11)      | NO   | PRI | NULL    | auto_increment |
+| emp_id  | int(11)      | NO   |     | NULL    |                |
+| paydate | date         | NO   |     | NULL    |                |
+| payoff  | int(11)      | YES  |     | NULL    |                |
+| comment | varchar(250) | YES  |     | NULL    |                |
++---------+--------------+------+-----+---------+----------------+
+5 rows in set (0,00 sec)
+
+# анализируем другую таблицу
+mysql> EXPLAIN `depart`;
++---------+-------------+------+-----+---------+----------------+
+| Field   | Type        | Null | Key | Default | Extra          |
++---------+-------------+------+-----+---------+----------------+
+| id      | int(11)     | NO   | PRI | NULL    | auto_increment |
+| name    | varchar(40) | NO   |     | NULL    |                |
+| count   | int(11)     | YES  |     | 0       |                |
+| head_id | int(11)     | YES  |     | NULL    |                |
++---------+-------------+------+-----+---------+----------------+
+4 rows in set (0,00 sec)
+
+# анализируем запрос с поиском по имени
+mysql> EXPLAIN SELECT `id` FROM `shtat` WHERE `name` = 'Тарас';
++----+-------------+-------+------------+------+---------------+------+---------+-------+------+----------+-------------+
+| id | select_type | table | partitions | type | possible_keys | key  | key_len | ref   | rows | filtered | Extra       |
++----+-------------+-------+------------+------+---------------+------+---------+-------+------+----------+-------------+
+|  1 | SIMPLE      | shtat | NULL       | ref  | name          | name | 102     | const |    1 |   100.00 | Using index |
++----+-------------+-------+------------+------+---------------+------+---------+-------+------+----------+-------------+
+1 row in set, 1 warning (0,00 sec)
+
+# смотрим индексы в таблице shtat
+mysql> SHOW INDEX FROM `shtat`;
++-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+---------+------------+
+| Table | Non_unique | Key_name | Seq_in_index | Column_name | Collation | Cardinality | Sub_part | Packed | Null | Index_type | Comment | Index_comment | Visible | Expression |
++-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+---------+------------+
+| shtat |          0 | PRIMARY  |            1 | id          | A         |           8 |     NULL |   NULL |      | BTREE      |         |               | YES     | NULL       |
+| shtat |          0 | name     |            1 | name        | A         |           8 |     NULL |   NULL |      | BTREE      |         |               | YES     | NULL       |
+| shtat |          0 | name     |            2 | lastname    | A         |           8 |     NULL |   NULL |      | BTREE      |         |               | YES     | NULL       |
+| shtat |          1 | dept_fk  |            1 | dep_id      | A         |           2 |     NULL |   NULL |      | BTREE      |         |               | YES     | NULL       |
++-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+---------+------------+
+4 rows in set (0,00 sec)
+
+# удаляем индекс
+mysql> ALTER TABLE `shtat` DROP INDEX `name`;
+Query OK, 0 rows affected (0,10 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+
+# снова анализируем запрос с поиском по имени (производительность снизилась)
+mysql> EXPLAIN SELECT `id` FROM `shtat` WHERE `name` = 'Тарас';
++----+-------------+-------+------------+------+---------------+------+---------+------+------+----------+-------------+
+| id | select_type | table | partitions | type | possible_keys | key  | key_len | ref  | rows | filtered | Extra       |
++----+-------------+-------+------------+------+---------------+------+---------+------+------+----------+-------------+
+|  1 | SIMPLE      | shtat | NULL       | ALL  | NULL          | NULL | NULL    | NULL |    8 |    12.50 | Using where |
++----+-------------+-------+------------+------+---------------+------+---------+------+------+----------+-------------+
+1 row in set, 1 warning (0,00 sec)
+
+# запросы с функциями агрегаторами всегда 100% кпд т.к. берутся все строки для их выполнения
+mysql> EXPLAIN SELECT MIN(`salary`) FROM `shtat`;
++----+-------------+-------+------------+------+---------------+------+---------+------+------+----------+-------+
+| id | select_type | table | partitions | type | possible_keys | key  | key_len | ref  | rows | filtered | Extra |
++----+-------------+-------+------------+------+---------------+------+---------+------+------+----------+-------+
+|  1 | SIMPLE      | shtat | NULL       | ALL  | NULL          | NULL | NULL    | NULL |    8 |   100.00 | NULL  |
++----+-------------+-------+------------+------+---------------+------+---------+------+------+----------+-------+
+1 row in set, 1 warning (0,00 sec)
+
+# но для ускорения работы запросы можно перефразировать
+mysql> SELECT `salary` FROM `shtat` ORDER BY `salary` ASC LIMIT 1;
++--------+
+| salary |
++--------+
+|  25000 |
++--------+
+1 row in set (0,00 sec)
+
+
+---
+
+
+# немного информации об индексах в запросах
+https://dev.mysql.com/doc/refman/8.0/en/index-hints.html
+
+# немного информации о переменных в mysql
+https://dev.mysql.com/doc/refman/8.0/en/sql-syntax-prepared-statements.html

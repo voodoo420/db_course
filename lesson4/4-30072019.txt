@@ -1,0 +1,267 @@
+﻿USE `lesson3`;
+
+# 1
+# 1.1 выбираем среднюю зп по отделам
+SELECT AVG(`salary`), `dep_id` FROM `shtat` GROUP BY `dep_id`;
+
+# 1.2 выбираем среднюю зп по отделам c указанием названия отдела
+SELECT AVG(`salary`), `depart`.`name` FROM `shtat` 
+LEFT JOIN `depart` ON `shtat`.`dep_id` = `depart`.`id`
+GROUP BY `depart`.`name`;
+
+# 1.3 выбираем среднюю зп по отделам c указанием названия отдела (если есть) и ид отдела
+# 1.3.1 находим переменную которая отвечает за режим работы сервера
+SHOW VARIABLES LIKE '%sql_mode%';
+
+# 1.3.2 из этой переменной (sql_mode) убираем ONLY_FULL_GROUP_BY
+SET GLOBAL sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
+
+# 1.3.3 выбираем среднюю зп по отделам c указанием названия и ид отдела
+SELECT `shtat`.`dep_id`, `depart`.`name`, AVG(`shtat`.`salary`) FROM `shtat` 
+LEFT JOIN `depart` ON `shtat`.`dep_id` = `depart`.`id`
+GROUP BY `shtat`.`dep_id`;
+
+
+# 2
+# 2 выбираем сотрудника с максимальной зп
+SELECT * FROM `shtat` WHERE `salary` = (SELECT MAX(`salary`) FROM `shtat`);
+
+# или так
+SELECT * FROM `shtat` ORDER BY `salary` DESC LIMIT 1;
+
+
+# 3
+# 3.1 удаляем сотрудника с максимальной зп через алиас
+
+# 3.1.1 находим переменную которая отвечает за безопасный режим
+#SHOW VARIABLES LIKE '%safe%';
+
+# 3.1.2 выключаем безопасный режим
+SET GLOBAL sql_safe_updates = 0;
+
+# 3.1.3 удаляем сотрудника
+DELETE FROM `shtat` WHERE `salary` = 
+(SELECT * FROM (SELECT MAX(`salary`) FROM `shtat`) AS `table1`) LIMIT 1;
+
+# 3.1.4 включаем безопасный режим
+SET GLOBAL sql_safe_updates = 1;
+
+# 3.2 чтобы не выключать безопасный режим нужно удалять через id
+DELETE FROM `shtat` WHERE `id` = (SELECT * FROM (SELECT `id` FROM `shtat` WHERE `salary` = 
+(SELECT MAX(`salary`) FROM `shtat`) LIMIT 1) AS `table1`);
+
+# 3.3.1 удаляем сотрудника с максимальной зп через ORDER BY
+DELETE FROM `shtat` ORDER BY `salary` DESC LIMIT 1;
+
+# 3.3.2 чтобы не выключать безопасный режим нужно удалять через id
+DELETE FROM `shtat` WHERE `id` = (SELECT * FROM 
+(SELECT id FROM `shtat` ORDER BY `salary` DESC LIMIT 1) AS `table1`);
+
+
+# 4
+# 4 считаем общее кол-во сотрудников
+SELECT COUNT(*) FROM `shtat`;
+# или так
+SELECT COUNT(`id`) FROM `shtat`;
+# но не так!
+SELECT MAX(`id`) FROM `shtat`;
+
+
+# 5
+# 5.1 считаем кол-во сотрудников по отделам и сколько всего денег получает отдел
+SELECT `dep_id`, COUNT(*), SUM(`salary`) FROM `shtat` GROUP BY `dep_id`;
+
+# 5.2 то же самое, но с названием отдела
+SELECT `dep_id`, COUNT(*) AS `кол-во`, SUM(`salary`) AS `ФОТ`, `depart`.`name` FROM `shtat` 
+LEFT JOIN `depart` ON `shtat`.`dep_id` = `depart`.`id`
+GROUP BY `dep_id`;
+
+
+---
+
+
+# создаем таблицу с датами
+CREATE TABLE IF NOT EXISTS `dates` (
+`id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+`emp_id` INT NOT NULL,
+`entrance` DATE,
+`layoff` DATE
+);
+
+# вставляем даты поступления на работу
+INSERT INTO `dates` (`entrance`, `emp_id`) VALUES (NOW(), 1), (NOW(), 2), (NOW(), 3) ...
+
+# a так можно заполнить даты сразу для всех сотрудников
+INSERT INTO `dates` (`entrance`, `emp_id`) SELECT CURDATE(), `id` FROM `shtat`;
+
+# пример JOIN для трех таблиц
+SELECT 
+`shtat`.`name` AS `Имя`, `shtat`.`lastname`, `shtat`.`salary`, `shtat`.`position`, 
+`depart`.`name` AS `Отдел`, 
+`dates`.`entrance`,`dates`.`layoff` FROM `shtat` 
+LEFT JOIN `depart` ON `shtat`.`dep_id` = `depart`.`id`
+LEFT JOIN `dates` ON `shtat`.`id` = `dates`.`emp_id`;
+
+
+---
+
+
+# создаем простое представление
+CREATE VIEW `emp1` AS
+SELECT `name`, `lastname`, `dep_id` FROM `shtat`;
+
+# работаем с представлением как с обычной таблицей
+SELECT * FROM `emp1`;
+SELECT `name` FROM `emp1` WHERE `dep_id` = 1;
+SELECT `salary` FROM `emp1`;
+
+# обновляем данные в основной табл через представление
+UPDATE `emp1` SET `name` = 'АлЁна' WHERE `name` = 'Алена';
+
+# вставить строки не получится, если не все NOT NULL столбцы есть в представлении
+INSERT INTO `emp1` VALUES ('Алексей', 'Магнитский', 1);
+
+# удаляем из основной табл через представление
+DELETE FROM `emp1` WHERE `name` = 'АлЁна';
+
+
+# создаем еще одно представление
+CREATE VIEW `emp2` AS
+SELECT 
+`shtat`.`name` AS `Имя`, `shtat`.`lastname`, `shtat`.`salary`, `shtat`.`position`, 
+`depart`.`name` AS `Отдел`, 
+`dates`.`entrance`,`dates`.`layoff` FROM `shtat` 
+LEFT JOIN `depart` ON `shtat`.`dep_id` = `depart`.`id`
+LEFT JOIN `dates` ON `shtat`.`id` = `dates`.`emp_id`;
+
+# можно просматривать данные через представление
+SELECT * FROM `emp2`;
+SELECT * FROM `emp2` WHERE `Отдел` = 'айти';
+
+# изменять и удалять данные через такое представление нельзя
+UPDATE `emp2` SET `Отдел` = 'Бухгалтерия' WHERE `name` = 'Анатолий';
+DELETE FROM `emp2` WHERE `salary` = 55000;
+
+# удаляем преставление
+DROP VIEW IF EXISTS `emp1`;
+
+# изменить преставление можно командой ALTER VIEW
+https://dev.mysql.com/doc/refman/8.0/en/alter-view.html
+
+
+---
+
+
+# объявляем переменную @a и присваиваем ей значение
+SET @a := 4;
+
+# выводим значение переменной @a
+SELECT @a;
+
+
+---
+
+
+# создаем процедуру которая выводит имена сотрудников по названию отдела
+delimiter //
+CREATE PROCEDURE `dep_epm` (depname VARCHAR(40))
+BEGIN
+SET @a := (SELECT `id` FROM `depart` WHERE `name` = depname);
+SELECT `name`, `lastname` FROM `shtat` WHERE `dep_id` = @a;
+END//
+delimiter ;
+
+# вызываем процедуру
+CALL `proc1`('Бухгалтерия');
+CALL `dep_epm`('HR');
+
+
+---
+
+
+# создаем функцию которая выводит кол-во сотрудников по id отдела
+CREATE FUNCTION `count_epm` (dept INT)
+RETURNS INT DETERMINISTIC
+READS SQL DATA
+RETURN (SELECT COUNT(*) FROM `shtat` WHERE `dep_id` = dept);
+
+# запускаем функцию
+SELECT `count_epm`(1);
+SELECT `count_epm`(777);
+
+
+---
+
+
+# создаем триггер который вставляет запись о дате поступления сотрудника на работу
+CREATE TRIGGER `welcome`
+AFTER INSERT ON `shtat`
+FOR EACH ROW
+INSERT INTO `dates` (`emp_id`,`entrance`) VALUES (NEW.id, NOW());
+
+
+# вставляем в таблицу shtat сразу несколько строк для проверки триггера
+INSERT INTO `shtat` 
+(`name`,`lastname`,`dep_id`,`salary`) VALUES
+('Тарас','Голомозый',1,25000),
+('Алена','Звягинцева',2,45000),
+('Владимир','Питерский',1,55000),
+('Антон','Полонников',1,65000);
+
+# смотрим таблицу dates
+SELECT * FROM `lesson3`.`dates`;
++----+--------+------------+------------+
+| id | emp_id | entrance   | layoff     |
++----+--------+------------+------------+
+|  1 |    601 | 2019-07-30 | NULL       |
+|  2 |    604 | 2019-07-30 | NULL       |
+|  3 |      2 | 2019-07-30 | NULL       |
+|  4 |      3 | 2019-07-30 | NULL       |
+|  5 |    600 | 2019-07-30 | NULL       |
+| 10 |    609 | 2019-07-30 | NULL       | <-- даты записались!
+| 11 |    610 | 2019-07-30 | NULL       | <-- даты записались!
+| 12 |    611 | 2019-07-30 | NULL       | <-- даты записались!
+| 13 |    612 | 2019-07-30 | NULL       | <-- даты записались!
++----+--------+------------+------------+
+9 rows in set (0,00 sec)
+
+
+
+# создаем триггер который вставляет запись о дате увольнения сотрудника
+## тут важно понимать, что о поступлении этого сотрудника на работу должна быть запись в таблице dates иначе триггер не сработает
+
+CREATE TRIGGER `goodbye`
+BEFORE DELETE ON `shtat`
+FOR EACH ROW
+UPDATE `dates` SET `layoff` = CURDATE() WHERE `emp_id` = OLD.id;
+
+# удаляем из таблицы shtat сотрудника id=610 для проверки триггера
+DELETE FROM `shtat` WHERE `id` = 610;
+
+# смотрим таблицу dates
+SELECT * FROM `dates`;
++----+--------+------------+------------+
+| id | emp_id | entrance   | layoff     |
++----+--------+------------+------------+
+|  1 |    601 | 2019-07-30 | NULL       |
+|  2 |    604 | 2019-07-30 | NULL       |
+|  3 |      2 | 2019-07-30 | NULL       |
+|  4 |      3 | 2019-07-30 | NULL       |
+|  5 |    600 | 2019-07-30 | NULL       |
+| 10 |    609 | 2019-07-30 | NULL       |
+| 11 |    610 | 2019-07-30 | 2019-07-30 | <-- дата записалась!
+| 12 |    611 | 2019-07-30 | NULL       |
+| 13 |    612 | 2019-07-30 | NULL       |
++----+--------+------------+------------+
+9 rows in set (0,00 sec)
+
+
+---
+
+
+# создание процедур и функций в MySQL
+https://dev.mysql.com/doc/refman/8.0/en/create-procedure.html
+
+# изменение существующих процедур и функций в MySQL
+https://dev.mysql.com/doc/refman/8.0/en/alter-procedure.html
+https://dev.mysql.com/doc/refman/8.0/en/alter-function.html

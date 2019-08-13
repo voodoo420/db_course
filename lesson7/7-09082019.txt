@@ -1,0 +1,442 @@
+﻿SHOW VARIABLES LIKE 'server_id';
+SET GLOBAL server_id = 215;
+
+
+
+login as: root
+root@192.168.3.49's password:
+
+# коннект к монго
+root@MySQL8:~# service mongod start
+root@MySQL8:~# service mongod restart
+root@MySQL8:~# mongo
+
+# смотрим какие на сервере есть базы
+> show dbs
+admin     0.000GB
+config    0.000GB
+local     0.000GB
+testtest  0.000GB
+
+# выбираем testtest
+> use testtest
+switched to db testtest
+
+# смотрим инфо о выбранной базе
+> db.stats()
+{
+        "db" : "testtest",
+        "collections" : 1,
+        "views" : 0,
+        "objects" : 2,
+        "avgObjSize" : 46,
+        "dataSize" : 92,
+        "storageSize" : 36864,
+        "numExtents" : 0,
+        "indexes" : 1,
+        "indexSize" : 32768,
+        "fsUsedSize" : 6824374272,
+        "fsTotalSize" : 7330062336,
+        "ok" : 1
+}
+
+# выводим конфиг монго на консоль
+> db.adminCommand('getCmdLineOpts')
+{
+        "argv" : [
+                "/usr/bin/mongod",
+                "--config",
+                "/etc/mongod.conf"
+        ],
+        "parsed" : {
+                "config" : "/etc/mongod.conf",
+                "net" : {
+                        "bindIp" : "127.0.0.1",
+                        "port" : 27017
+                },
+                "processManagement" : {
+                        "timeZoneInfo" : "/usr/share/zoneinfo"
+                },
+                "storage" : {
+                        "dbPath" : "/var/lib/mongodb",
+                        "journal" : {
+                                "enabled" : true
+                        }
+                },
+                "systemLog" : {
+                        "destination" : "file",
+                        "logAppend" : true,
+                        "path" : "/var/log/mongodb/mongod.log"
+                }
+        },
+        "ok" : 1
+}
+
+# разлогиниваемся
+> exit
+bye
+
+
+# делаем бекап mongo простым копированием файлов
+root@MySQL8:~# cp -r /var/lib/mongodb /var/backups_aug/
+
+# делаем бекап с помощью mongodump
+root@MySQL8:~# mongodump --db testtest --out /var/backups_aug/backup_`date '+%Y.%m.%d'`
+2019-08-09T20:26:33.986+0300    writing testtest.testtest to
+2019-08-09T20:26:33.993+0300    done dumping testtest.testtest (2 documents)
+
+
+# логинимся и дропаем бд testtest
+root@MySQL8:~# mongo
+
+> show dbs
+admin     0.000GB
+config    0.000GB
+local     0.000GB
+testtest  0.000GB
+
+> use testtest
+switched to db testtest
+
+> db.testtest.drop()
+true
+
+> show dbs
+admin   0.000GB
+config  0.000GB
+local   0.000GB
+
+> exit
+bye
+
+# восстанавливаем testtest из бекапа с помощью mongorestore
+root@MySQL8:~# mongorestore --db testtest /var/backups_aug/backup_2019.08.09/testtest/
+2019-08-09T20:30:12.561+0300    the --db and --collection args should only be used when restoring from a BSON file. Other uses are deprecated and will not exist in the future; use --nsInclude instead
+2019-08-09T20:30:12.564+0300    building a list of collections to restore from /var/backups_aug/backup_2019.08.09/testtest dir
+2019-08-09T20:30:12.566+0300    reading metadata for testtest.testtest from /var/backups_aug/backup_2019.08.09/testtest/testtest.metadata.json
+2019-08-09T20:30:12.609+0300    restoring testtest.testtest from /var/backups_aug/backup_2019.08.09/testtest/testtest.bson
+2019-08-09T20:30:12.620+0300    no indexes to restore
+2019-08-09T20:30:12.620+0300    finished restoring testtest.testtest (2 documents)
+2019-08-09T20:30:12.620+0300    done
+
+
+# делаем бекап lesson3 c помощью mysqldump
+root@MySQL8:~# mysqldump -u root -p123123 lesson3 --routines > /var/backups_aug/backup_`date '+%Y.%m.%d'`.sql
+mysqldump: [Warning] Using a password on the command line interface can be insecure.
+
+# логинимся и создаем пустую бд
+root@MySQL8:~# mysql -u root -p123123
+
+
+mysql> CREATE DATABASE `lesson7`;
+Query OK, 1 row affected (0,06 sec)
+
+mysql> quit
+Bye
+
+# восстанавливаем lesson3 из бекапа как lesson7
+root@MySQL8:~# mysql -u root -p123123 lesson7 < /var/backups_aug/backup_`date '+%Y.%m.%d'`.sql
+mysql: [Warning] Using a password on the command line interface can be insecure.
+
+# логинимся в MySQL и проверяем восстановленную БД на сервере
+root@MySQL8:~# mysql -u root -p
+Enter password: ******
+
+root@MySQL8:~# SELECT * FROM `lesson7`.`shtat`;
+
+
+---
+
+
+# пример CSV
+id,name,lastname,dep_id,salary;
+1,Tapac,Golomozy,125,25000;
+2,Anton,Polonnikov,12,45000;
+
+
+CREATE TABLE `shtat_csv` (
+  `id` INT NOT NULL,
+  `name` VARCHAR(45) NOT NULL,
+  `lastname` VARCHAR(50) NOT NULL,
+  `dep_id` INT NOT NULL,
+  `salary` INT NOT NULL)
+ENGINE = CSV;
+
+# движок можно поменять командой ALTER
+ALTER TABLE `shtat_csv` ENGINE=InnoDB;
+
+SHOW CREATE TABLE `shtat_csv`;
+
+
+---
+
+
+# логинимся от имени root
+root@MySQL8:~# mysql -u root -p
+Enter password: ******
+
+# создаем пользователя big
+mysql> CREATE USER IF NOT EXISTS 'big'@'%' IDENTIFIED WITH mysql_native_password BY '123123';
+Query OK, 0 rows affected (0,07 sec)
+
+# даем пользователю big все права с возможностью передачи
+mysql> GRANT ALL PRIVILEGES ON *.* TO 'big'@'%' WITH GRANT OPTION;
+Query OK, 0 rows affected (0,11 sec)
+
+# обновляем права
+mysql> FLUSH PRIVILEGES;
+Query OK, 0 rows affected (0,01 sec)
+
+# разлогиниваемся
+mysql> quit
+Bye
+
+
+---
+
+
+# логинимся от имени big
+root@MySQL8:~# mysql -u big -p123123
+
+# проверяем права
+
+# смотрим какие БД есть на сервере
+mysql> SHOW DATABASES;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| lesson2            |
+| lesson3            |
+| lesson7            |
+| mysql              |
+| performance_schema |
+| phpmyadmin         |
+| sys                |
++--------------------+
+8 rows in set (0,00 sec)
+
+# проверяем права командой SELECT
+mysql> SELECT * FROM `lesson7`.`depart`;
++----+-----------------------------------+-------+---------+
+| id | name                              | count | head_id |
++----+-----------------------------------+-------+---------+
+|  1 | айти                              |     3 |    NULL |
+|  2 | Бухгалтерия                       |     0 |    NULL |
+|  3 | Маркетинг                         |     0 |    NULL |
+|  4 | Столовая                          |     0 |    NULL |
+|  5 | Охрана                            |     0 |    NULL |
+|  6 | Реклама                           |     0 |    NULL |
+|  7 | Контроль кач-ва                   |     0 |    NULL |
+|  8 | HR                                |     0 |    NULL |
+|  9 | Отдел образования                 |     0 |    NULL |
++----+-----------------------------------+-------+---------+
+9 rows in set (0,00 sec)
+
+# смотрим какие юзеры есть на сервере
+mysql> SELECT `user`, `host` FROM `mysql`.`user`;
++------------------+-----------+
+| user             | host      |
++------------------+-----------+
+| big              | %         |
+| december         | %         |
+| geek29           | %         |
+| root             | %         |
+| dec07            | localhost |
+| fff              | localhost |
+| geek7            | localhost |
+| geek_nov         | localhost |
+| mysql.infoschema | localhost |
+| mysql.session    | localhost |
+| mysql.sys        | localhost |
+| october          | localhost |
+| october2         | localhost |
+| phpmyadmin       | localhost |
+| root             | localhost |
++------------------+-----------+
+15 rows in set (0,00 sec)
+
+
+# создаем пользователя small
+mysql> CREATE USER 'small'@'localhost' IDENTIFIED WITH mysql_native_password BY '123123' PASSWORD EXPIRE INTERVAL 30 DAY;
+Query OK, 0 rows affected (0,05 sec)
+
+# даем пользователю small права SELECT, TRIGGER и DELETE на указанные таблицы
+mysql> GRANT SELECT, DELETE, TRIGGER ON `lesson3`.`shtat` TO 'small'@'localhost';
+Query OK, 0 rows affected (0,06 sec)
+
+# обновляем права
+mysql> FLUSH PRIVILEGES;
+Query OK, 0 rows affected (0,01 sec)
+
+# смотрим права пользователя small
+mysql> SHOW GRANTS FOR 'small'@'localhost';
++---------------------------------------------------------------------------+
+| Grants for small@localhost                                                |
++---------------------------------------------------------------------------+
+| GRANT USAGE ON *.* TO `small`@`localhost`                                 |
+| GRANT SELECT, DELETE, TRIGGER ON `lesson3`.`shtat` TO `small`@`localhost` |
++---------------------------------------------------------------------------+
+2 rows in set (0,00 sec)
+
+# разлогиниваемся
+mysql> quit
+Bye
+
+
+---
+
+
+# логинимся от имени small
+root@MySQL8:~# mysql -u small -p123123
+
+# проверяем права
+mysql> SHOW SCHEMAS;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| lesson3            |
++--------------------+
+2 rows in set (0,00 sec)
+
+mysql> USE lesson3;
+Database changed
+
+mysql> SHOW TABLES;
++-------------------+
+| Tables_in_lesson3 |
++-------------------+
+| shtat             |
++-------------------+
+1 row in set (0,00 sec)
+
+
+mysql> SELECT * FROM `depart`;
+ERROR 1142 (42000): SELECT command denied to user 'small'@'localhost' for table 'depart'
+mysql> SELECT * FROM `food`;
+ERROR 1142 (42000): SELECT command denied to user 'small'@'localhost' for table 'food'
+mysql> SELECT * FROM `shtat`;
++-----+------------------+------------------------+--------+--------+------------------------+
+| id  | name             | lastname               | dep_id | salary | position               |
++-----+------------------+------------------------+--------+--------+------------------------+
+|   2 | Евгений          | Вотановский            |      2 |  35000 | Менеджер               |
+| 600 | Ирина            | Кенина                 |      2 |  30000 | Бухгалтер              |
+| 601 | Анатолий         | Башлыков               |      1 |  40000 | Программист            |
+| 604 | Валерий          | Юрченко                |      1 |  45000 | NULL                   |
+| 609 | Тарас            | Голомозый              |      1 |  25000 | NULL                   |
+| 611 | Владимир         | Питерский              |      1 |  55000 | Менеджер               |
+| 612 | Антон            | Полонников             |      1 |  65000 | NULL                   |
+| 613 | Валерий          | Воронов                |      1 |  60000 | NULL                   |
+| 615 | Валерий          | Шансонов               |      1 |  60000 | NULL                   |
+| 616 | Денис            | Сусанин                |      1 |  35000 | NULL                   |
++-----+------------------+------------------------+--------+--------+------------------------+
+10 rows in set (0,00 sec)
+
+mysql> DELETE FROM `shtat` WHERE `id` = 2;
+Query OK, 1 row affected (0,06 sec)
+
+mysql> UPDATE `shtat` SET `id` = 23 WHERE `id` = 600;
+ERROR 1142 (42000): UPDATE command denied to user 'small'@'localhost' for table 'shtat'
+
+# разлогиниваемся
+mysql> quit
+Bye
+
+
+---
+
+
+
+# логинимся от имени big 
+root@MySQL8:~# mysql -u big -p123123
+
+# забираем у пользователя small возможность выполнять команды DELETE и TRIGGER
+mysql> REVOKE DELETE, TRIGGER ON `lesson3`.`shtat` FROM `small`@`localhost`;
+Query OK, 0 rows affected (0,08 sec)
+
+# обновляем права
+mysql> FLUSH PRIVILEGES;
+Query OK, 0 rows affected (0,00 sec)
+
+# снова смотрим права пользователя small
+mysql> SHOW GRANTS FOR 'small'@'localhost';
++----------------------------------------------------------+
+| Grants for small@localhost                               |
++----------------------------------------------------------+
+| GRANT USAGE ON *.* TO `small`@`localhost`                |
+| GRANT SELECT ON `lesson3`.`shtat` TO `small`@`localhost` |
++----------------------------------------------------------+
+2 rows in set (0,00 sec)
+
+
+# разлогиниваемся
+mysql quit
+Bye
+
+
+---
+
+
+# логинимся от имени big
+root@MySQL8~# mysql -u big -p123123
+
+# меняем пароль root от имени другого пользователя с помощью SQL-команды
+mysql SET PASSWORD FOR 'root'@'localhost' = 'qwerty';
+Query OK, 0 rows affected (0,10 sec)
+
+# обновляем права
+mysql FLUSH PRIVILEGES;
+Query OK, 0 rows affected (0,01 sec)
+
+# разлогиниваемся
+mysql quit
+Bye
+
+# проверяем пароль root (старый не работает)
+root@MySQL8~# mysql -u root -p123123
+ERROR 1045 (28000) Access denied for user 'root'@'localhost' (using password YES)
+
+# проверяем пароль root (новый работает)
+root@MySQL8~# mysql -u root -pqwerty
+mysql [Warning] Using a password on the command line interface can be insecure.
+
+# разлогиниваемся
+mysql quit
+Bye
+
+
+---
+
+
+# можно поменять пароль через утилиту mysqladmin (но нужно знать старый)
+root@MySQL8~# mysqladmin -u root -p123123 password '12341234'
+
+
+---
+
+
+# немного о кластеризации и шардинге в mongodb
+httpsdocs.mongodb.commanualtutorialdeploy-shard-cluster
+httpsdocs.mongodb.commanualsharding
+
+# сравнение характеристик популярных движков mysql
+httpsdev.mysql.comdocrefman8.0enstorage-engines.html
+
+# подробное описание возможностей mysqldump
+httpsdev.mysql.comdocrefman8.0enmysqldump.html
+
+# подробное описание возможностей mongodump
+httpsdocs.mongodb.comv4.0referenceprogrammongodump
+
+# создание пользователей в mongo
+httpsdocs.mongodb.commanualreferencemethoddb.createUser
+
+# создание аккаунтов
+httpsdev.mysql.comdocrefman8.0encreating-accounts.html
+
+# список привилегий
+httpsdev.mysql.comdocrefman8.0engrant.html#grant-privileges
+
+# справочник по привилегиям пользователей mysql
+httpsdev.mysql.comdocrefman8.0enprivileges-provided.html
