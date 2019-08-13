@@ -1,0 +1,281 @@
+#Урок 7. Обзор движков MySQL, управление и обслуживание. Подготовка к собеседованию.
+
+#1. Создать нового пользователя и задать ему права доступа на базу данных «Страны и города мира».
+
+mysql> CREATE USER IF NOT EXISTS 'big'@'%' IDENTIFIED WITH mysql_native_password BY '123123';
+Query OK, 0 rows affected (0,04 sec)
+
+mysql> GRANT ALL PRIVILEGES ON *.* TO 'big'@'%' WITH GRANT OPTION;
+Query OK, 0 rows affected (0,09 sec)
+
+mysql> FLUSH PRIVILEGES;
+Query OK, 0 rows affected (0,00 sec)
+
+mysql> quit
+Bye
+root@MySQL8:~# mysql -u big -p123123
+mysql: [Warning] Using a password on the command line interface can be insecure.
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 15
+Server version: 8.0.13 MySQL Community Server - GPL
+
+Copyright (c) 2000, 2018, Oracle and/or its affiliates. All rights reserved.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql> SHOW DATABASES;
++--------------------+
+| Database           |
++--------------------+
+| cities             |
+| information_schema |
+| lesson3            |
+| mysql              |
+| performance_schema |
+| phpmyadmin         |
+| sys                |
++--------------------+
+7 rows in set (0,00 sec)
+
+mysql> SELECT * FROM `lesson3`.`depart`;
++----+-----------------------------------+-------+---------+
+| id | name                              | count | head_id |
++----+-----------------------------------+-------+---------+
+|  1 | Айти                              |     0 |    NULL |
+|  2 | Бухгалтерия                       |     0 |    NULL |
+|  3 | Маркетинг                         |     0 |    NULL |
+|  4 | Столовая                          |     0 |    NULL |
+|  5 | Охрана                            |     0 |    NULL |
+|  6 | Реклама                           |     0 |    NULL |
+|  7 | Контроль кач-ва                   |     0 |    NULL |
+|  8 | HR                                |     0 |    NULL |
+|  9 | Отдел образования                 |     0 |    NULL |
++----+-----------------------------------+-------+---------+
+9 rows in set (0,01 sec)
+
+mysql> SELECT `user`, `host` FROM `mysql`.`user`;
++------------------+-----------+
+| user             | host      |
++------------------+-----------+
+| big              | %         |
+| december         | %         |
+| geek29           | %         |
+| root             | %         |
+| dec07            | localhost |
+| fff              | localhost |
+| geek7            | localhost |
+| geek_nov         | localhost |
+| mysql.infoschema | localhost |
+| mysql.session    | localhost |
+| mysql.sys        | localhost |
+| october          | localhost |
+| october2         | localhost |
+| phpmyadmin       | localhost |
+| root             | localhost |
++------------------+-----------+
+15 rows in set (0,00 sec)
+
+mysql> CREATE USER 'putin'@'%' IDENTIFIED WITH mysql_native_password BY '123123' PASSWORD EXPIRE INTERVAL 7 DAY;
+Query OK, 0 rows affected (0,03 sec)
+
+mysql> GRANT SELECT, DELETE, TRIGGER ON cities TO 'putin'@'%';
+ERROR 1046 (3D000): No database selected
+mysql> GRANT SELECT, DELETE, TRIGGER ON `cities` TO 'putin'@'%';
+ERROR 1046 (3D000): No database selected
+mysql> GRANT SELECT, DELETE, TRIGGER ON `cities`.* TO 'putin'@'%';
+Query OK, 0 rows affected (0,07 sec)
+
+mysql> FLUSH PRIVILEGES;
+Query OK, 0 rows affected (0,00 sec)
+
+mysql> SHOW GRANT FOR 'putin'@'%';
+ERROR 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'GRANT FOR 'putin'@'%'' at line 1
+mysql> SHOW GRANTS FOR 'putin'@'%';
++------------------------------------------------------------+
+| Grants for putin@%                                         |
++------------------------------------------------------------+
+| GRANT USAGE ON *.* TO `putin`@`%`                          |
+| GRANT SELECT, DELETE, TRIGGER ON `cities`.* TO `putin`@`%` |
++------------------------------------------------------------+
+2 rows in set (0,00 sec)
+
+mysql> quit
+Bye
+root@MySQL8:~# mysql -u putin -p123123
+mysql: [Warning] Using a password on the command line interface can be insecure.
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 16
+Server version: 8.0.13 MySQL Community Server - GPL
+
+Copyright (c) 2000, 2018, Oracle and/or its affiliates. All rights reserved.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql> SHOW DATABASES;
++--------------------+
+| Database           |
++--------------------+
+| cities             |
+| information_schema |
++--------------------+
+2 rows in set (0,01 sec)
+
+mysql> SELECT * FROM `cities`.`_cities`;
++----+------------+-----------+-----------+------------------+
+| id | country_id | important | region_id | title            |
++----+------------+-----------+-----------+------------------+
+|  1 |          1 |         0 |         1 | Kazan            |
+|  2 |          1 |         0 |         2 | Moscow           |
+|  3 |          1 |         0 |         3 | Saint-Petersburg |
+|  4 |          2 |         0 |         4 | New York         |
+|  5 |          2 |         0 |         5 | San Francisco    |
+|  6 |          2 |         0 |         5 | Los Angeles      |
+|  7 |          3 |         0 |         6 | Barcelona        |
+|  8 |          3 |         0 |         7 | Madrid           |
+|  9 |          3 |         0 |         8 | Ibiza            |
+| 10 |          1 |         0 |         2 | Khimki           |
+| 11 |          1 |         0 |         2 | Reutov           |
+| 12 |          1 |         0 |         2 | Podolsk          |
++----+------------+-----------+-----------+------------------+
+12 rows in set (0,00 sec)
+
+mysql> DELETE FROM `_cities` WHERE `id`=12;
+ERROR 1046 (3D000): No database selected
+mysql> USE cities;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+mysql> DELETE FROM `_cities` WHERE `id`=12;
+Query OK, 1 row affected (0,08 sec)
+
+mysql> SELECT * FROM `cities`.`_cities`;
++----+------------+-----------+-----------+------------------+
+| id | country_id | important | region_id | title            |
++----+------------+-----------+-----------+------------------+
+|  1 |          1 |         0 |         1 | Kazan            |
+|  2 |          1 |         0 |         2 | Moscow           |
+|  3 |          1 |         0 |         3 | Saint-Petersburg |
+|  4 |          2 |         0 |         4 | New York         |
+|  5 |          2 |         0 |         5 | San Francisco    |
+|  6 |          2 |         0 |         5 | Los Angeles      |
+|  7 |          3 |         0 |         6 | Barcelona        |
+|  8 |          3 |         0 |         7 | Madrid           |
+|  9 |          3 |         0 |         8 | Ibiza            |
+| 10 |          1 |         0 |         2 | Khimki           |
+| 11 |          1 |         0 |         2 | Reutov           |
++----+------------+-----------+-----------+------------------+
+11 rows in set (0,00 sec)
+
+mysql> UPDATE `_cities` SET `country_id` = 2 WHERE `id` = 11;
+ERROR 1142 (42000): UPDATE command denied to user 'putin'@'localhost' for table '_cities'
+
+root@MySQL8:~# mysql -u big -p123123
+
+mysql> REVOKE DELETE, TRIGGER ON `cities`.* FROM 'putin'@'%';
+Query OK, 0 rows affected (0,01 sec)
+
+mysql> FLUSH PRIVILEGES;
+Query OK, 0 rows affected (0,00 sec)
+
+mysql> SHOW GRANT FOR 'putin'@'%';
+ERROR 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'GRANT FOR 'putin'@'%'' at line 1
+mysql> SHOW GRANTS FOR 'putin'@'%';
++-------------------------------------------+
+| Grants for putin@%                        |
++-------------------------------------------+
+| GRANT USAGE ON *.* TO `putin`@`%`         |
+| GRANT SELECT ON `cities`.* TO `putin`@`%` |
++-------------------------------------------+
+2 rows in set (0,00 sec)
+
+
+
+
+#2. Сделать резервную копию базы, удалить базу и пересоздать из бекапа.
+
+root@MySQL8:~# mysqldump -u root -p123123 cities --routines > /var/cities_`date '+%Y.%m.%d'`.sql
+
+mysql> show databases;
++--------------------+
+| Database           |
++--------------------+
+| cities             |
+| information_schema |
+| lesson3            |
+| mysql              |
+| performance_schema |
+| phpmyadmin         |
+| sys                |
++--------------------+
+7 rows in set (0,00 sec)
+
+mysql> DROP DATABASE cities;
+Query OK, 3 rows affected (0,08 sec)
+
+mysql> show databases;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| lesson3            |
+| mysql              |
+| performance_schema |
+| phpmyadmin         |
+| sys                |
++--------------------+
+6 rows in set (0,00 sec)
+
+mysql> CREATE DATABASE cities;
+Query OK, 1 row affected (0,12 sec)
+
+root@MySQL8:~# mysql -u root -p123123 cities < /var/cities_`date '+%Y.%m.%d'`.sql
+
+mysql> show databases;
++--------------------+
+| Database           |
++--------------------+
+| cities             |
+| information_schema |
+| lesson3            |
+| mysql              |
+| performance_schema |
+| phpmyadmin         |
+| sys                |
++--------------------+
+7 rows in set (0,00 sec)
+
+mysql> USE cities;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+mysql> SHOW * FROM `_cities`;
+ERROR 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '* FROM `_cities`' at line 1
+mysql> SELECT * FROM `_cities`;
++----+------------+-----------+-----------+------------------+
+| id | country_id | important | region_id | title            |
++----+------------+-----------+-----------+------------------+
+|  1 |          1 |         0 |         1 | Kazan            |
+|  2 |          1 |         0 |         2 | Moscow           |
+|  3 |          1 |         0 |         3 | Saint-Petersburg |
+|  4 |          2 |         0 |         4 | New York         |
+|  5 |          2 |         0 |         5 | San Francisco    |
+|  6 |          2 |         0 |         5 | Los Angeles      |
+|  7 |          3 |         0 |         6 | Barcelona        |
+|  8 |          3 |         0 |         7 | Madrid           |
+|  9 |          3 |         0 |         8 | Ibiza            |
+| 10 |          1 |         0 |         2 | Khimki           |
+| 11 |          1 |         0 |         2 | Reutov           |
+| 12 |          1 |         0 |         2 | Podolsk          |
++----+------------+-----------+-----------+------------------+
+12 rows in set (0,00 sec)
+
