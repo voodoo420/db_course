@@ -1,0 +1,648 @@
+#Урок 6. Масштабирование MySQL и NoSQL
+#1. Настроить и запустить master-сервер.
+
+/etc/mysql/conf.d/master.cnf
+
+[mysqld]
+
+server-id = 1
+
+log_bin = /var/log/mysql/bin.log
+
+binlog_do_db = cities, lesson3
+
+----------------------------------------------------------------------------------
+mysql> GRANT REPLICATION SLAVE ON *.* TO 'root'@'%';
+Query OK, 0 rows affected (0,00 sec)
+
+mysql> FLUSH PRIVILEGES;
+Query OK, 0 rows affected (0,00 sec)
+
+mysql> SHOW MASTER STATUS;
++------------+----------+-----------------+------------------+-------------------+
+| File       | Position | Binlog_Do_DB    | Binlog_Ignore_DB | Executed_Gtid_Set |
++------------+----------+-----------------+------------------+-------------------+
+| bin.000031 |      538 | cities, lesson3 |                  |                   |
++------------+----------+-----------------+------------------+-------------------+
+1 row in set (0,00 sec)
+
+----------------------------------------------------------------------------------
+mysqldump -u root -p123123 -B cities lesson3 --routines > /var/0908dump.sql
+
+----------------------------------------------------------------------------------
+#слейв
+/etc/mysql/conf.d/slave.cnf
+
+[mysqld]
+
+server-id = 2
+
+log_bin = bin.log
+
+binlog_do_db = cities, lesson3
+
+relay-log = /var/log/mysql/relay.log
+
+----------------------------------------------------------------------------------
+#putty на линукс отказался копировать текст, хоть с шифтом, хоть без
+#вроде слейв ждал "посланий" от мастера, но на слейве таблицы не менялись
+
+проделал тоже самое заново, используя терминале слейва
+
+mysql> STOP SLAVE;
+Query OK, 0 rows affected (0,09 sec)
+
+mysql> RESET SLAVE;
+Query OK, 0 rows affected (0,08 sec)
+
+mysql> CHANGE MASTER TO MASTER_HOST='192.168.1.161', MASTER_USER='root', MASTER_PASSWORD='123123', MASTER_LOG_FILE='bin.000031', MASTER_LOG_POS=538;
+Query OK, 0 rows affected, 2 warnings (0,14 sec)
+
+mysql> SHOW SLAVE STATUS \G
+*************************** 1. row ***************************
+               Slave_IO_State: Waiting for master to send event
+                  Master_Host: 192.168.1.161
+                  Master_User: root
+                  Master_Port: 3306
+                Connect_Retry: 60
+              Master_Log_File: bin.000031
+          Read_Master_Log_Pos: 538
+               Relay_Log_File: relay.000002
+                Relay_Log_Pos: 316
+        Relay_Master_Log_File: bin.000031
+             Slave_IO_Running: Yes
+            Slave_SQL_Running: Yes
+              Replicate_Do_DB: 
+          Replicate_Ignore_DB: 
+           Replicate_Do_Table: 
+       Replicate_Ignore_Table: 
+      Replicate_Wild_Do_Table: 
+  Replicate_Wild_Ignore_Table: 
+                   Last_Errno: 0
+                   Last_Error: 
+                 Skip_Counter: 0
+          Exec_Master_Log_Pos: 538
+              Relay_Log_Space: 514
+              Until_Condition: None
+               Until_Log_File: 
+                Until_Log_Pos: 0
+           Master_SSL_Allowed: No
+           Master_SSL_CA_File: 
+           Master_SSL_CA_Path: 
+              Master_SSL_Cert: 
+            Master_SSL_Cipher: 
+               Master_SSL_Key: 
+        Seconds_Behind_Master: 0
+Master_SSL_Verify_Server_Cert: No
+                Last_IO_Errno: 0
+                Last_IO_Error: 
+               Last_SQL_Errno: 0
+               Last_SQL_Error: 
+  Replicate_Ignore_Server_Ids: 
+             Master_Server_Id: 1
+                  Master_UUID: 3a90a3b6-f1ab-11e8-8365-080027ad0e39
+             Master_Info_File: mysql.slave_master_info
+                    SQL_Delay: 0
+          SQL_Remaining_Delay: NULL
+      Slave_SQL_Running_State: Slave has read all relay log; waiting for more updates
+           Master_Retry_Count: 86400
+                  Master_Bind: 
+      Last_IO_Error_Timestamp: 
+     Last_SQL_Error_Timestamp: 
+               Master_SSL_Crl: 
+           Master_SSL_Crlpath: 
+           Retrieved_Gtid_Set: 
+            Executed_Gtid_Set: 
+                Auto_Position: 0
+         Replicate_Rewrite_DB: 
+                 Channel_Name: 
+           Master_TLS_Version: 
+       Master_public_key_path: 
+        Get_master_public_key: 0
+1 row in set (0,00 sec)
+
+mysql> START SLAVE;
+Query OK, 0 rows affected, 1 warning (0,00 sec)
+
+----------------------------------------------------------------------------------
+#на мастере
+
+mysql> select * from `_countries`;
++----+--------+
+| id | title  |
++----+--------+
+|  4 | FRANCE |
+|  1 | Russia |
+|  3 | Spain  |
+|  2 | Usa    |
++----+--------+
+4 rows in set (0,00 sec)
+
+mysql> INSERT INTO `_countries` (title) VALUE ('UK');
+Query OK, 1 row affected (0,07 sec)
+
+mysql> select * from `_countries`;
++----+--------+
+| id | title  |
++----+--------+
+|  4 | FRANCE |
+|  1 | Russia |
+|  3 | Spain  |
+|  5 | UK     |
+|  2 | Usa    |
++----+--------+
+5 rows in set (0,00 sec)
+
+#на слейве
+
+mysql> SELECT * FROM `_countries`;
++----+--------+
+| id | title  |
++----+--------+
+|  1 | Russia |
+|  3 | Spain  |
+|  2 | Usa    |
++----+--------+
+3 rows in set (0,00 sec)
+
+#и вторая попытка оказалась безрезультатной
+
+----------------------------------------------------------------------------------
+#еще попытка, мастер
+mysql> SHOW MASTER STATUS;
++------------+----------+-----------------+------------------+-------------------+
+| File       | Position | Binlog_Do_DB    | Binlog_Ignore_DB | Executed_Gtid_Set |
++------------+----------+-----------------+------------------+-------------------+
+| bin.000032 |      155 | cities, lesson3 |                  |                   |
++------------+----------+-----------------+------------------+-------------------+
+1 row in set (0,00 sec)
+
+mysqldump -u root -p123123 -B cities lesson3 --routines > /var/0908dump.sql
+
+#далее перенес дамп на слейв, сделал импорт
+
+#еще раз на мастере
+
+mysql> GRANT REPLICATION SLAVE ON *.* TO 'root'@'%';
+Query OK, 0 rows affected (0,01 sec)
+
+mysql> FLUSH PRIVILEGES;
+Query OK, 0 rows affected (0,00 sec)
+
+mysql> SHOW MASTER STATUS;
++------------+----------+-----------------+------------------+-------------------+
+| File       | Position | Binlog_Do_DB    | Binlog_Ignore_DB | Executed_Gtid_Set |
++------------+----------+-----------------+------------------+-------------------+
+| bin.000032 |      538 | cities, lesson3 |                  |                   |
++------------+----------+-----------------+------------------+-------------------+
+1 row in set (0,00 sec)
+
+#ниже слейв
+mysql> STOP SLAVE;
+Query OK, 0 rows affected (0,02 sec)
+
+mysql> RESET SLAVE;
+Query OK, 0 rows affected (0,08 sec)
+
+mysql> CHANGE MASTER TO MASTER_HOST='192.168.1.161', MASTER_USER='root', MASTER_PASSWORD='123123', MASTER_LOG_FILE='bin.000032', MASTER_LOG_POS=538;
+Query OK, 0 rows affected, 2 warnings (0,11 sec)
+
+mysql> START SLAVE;
+Query OK, 0 rows affected (0,01 sec)
+
+mysql> SHOW SLAVE STATUS \G
+*************************** 1. row ***************************
+               Slave_IO_State: Waiting for master to send event
+                  Master_Host: 192.168.1.161
+                  Master_User: root
+                  Master_Port: 3306
+                Connect_Retry: 60
+              Master_Log_File: bin.000032
+          Read_Master_Log_Pos: 538
+               Relay_Log_File: relay.000002
+                Relay_Log_Pos: 316
+        Relay_Master_Log_File: bin.000032
+             Slave_IO_Running: Yes
+            Slave_SQL_Running: Yes
+              Replicate_Do_DB: 
+          Replicate_Ignore_DB: 
+           Replicate_Do_Table: 
+       Replicate_Ignore_Table: 
+      Replicate_Wild_Do_Table: 
+  Replicate_Wild_Ignore_Table: 
+                   Last_Errno: 0
+                   Last_Error: 
+                 Skip_Counter: 0
+          Exec_Master_Log_Pos: 538
+              Relay_Log_Space: 514
+              Until_Condition: None
+               Until_Log_File: 
+                Until_Log_Pos: 0
+           Master_SSL_Allowed: No
+           Master_SSL_CA_File: 
+           Master_SSL_CA_Path: 
+              Master_SSL_Cert: 
+            Master_SSL_Cipher: 
+               Master_SSL_Key: 
+        Seconds_Behind_Master: 0
+Master_SSL_Verify_Server_Cert: No
+                Last_IO_Errno: 0
+                Last_IO_Error: 
+               Last_SQL_Errno: 0
+               Last_SQL_Error: 
+  Replicate_Ignore_Server_Ids: 
+             Master_Server_Id: 1
+                  Master_UUID: 3a90a3b6-f1ab-11e8-8365-080027ad0e39
+             Master_Info_File: mysql.slave_master_info
+                    SQL_Delay: 0
+          SQL_Remaining_Delay: NULL
+      Slave_SQL_Running_State: Slave has read all relay log; waiting for more updates
+           Master_Retry_Count: 86400
+                  Master_Bind: 
+      Last_IO_Error_Timestamp: 
+     Last_SQL_Error_Timestamp: 
+               Master_SSL_Crl: 
+           Master_SSL_Crlpath: 
+           Retrieved_Gtid_Set: 
+            Executed_Gtid_Set: 
+                Auto_Position: 0
+         Replicate_Rewrite_DB: 
+                 Channel_Name: 
+           Master_TLS_Version: 
+       Master_public_key_path: 
+        Get_master_public_key: 0
+1 row in set (0,00 sec)
+
+
+#мастер:
+mysql> use cities;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+mysql> select * from `_countries`;
++----+--------+
+| id | title  |
++----+--------+
+|  4 | FRANCE |
+|  1 | Russia |
+|  3 | Spain  |
+|  5 | UK     |
+|  2 | Usa    |
++----+--------+
+5 rows in set (0,00 sec)
+
+mysql> INSERT INTO `_countries` (title) VALUE ('Germany');
+Query OK, 1 row affected (0,08 sec)
+
+mysql> select * from `_countries`;
++----+---------+
+| id | title   |
++----+---------+
+|  4 | FRANCE  |
+|  6 | Germany |
+|  1 | Russia  |
+|  3 | Spain   |
+|  5 | UK      |
+|  2 | Usa     |
++----+---------+
+6 rows in set (0,00 sec)
+
+mysql> 
+
+
+#слейв
+mysql> use cities;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+mysql> SELECT * FROM `_countries`;
++----+--------+
+| id | title  |
++----+--------+
+|  4 | FRANCE |
+|  1 | Russia |
+|  3 | Spain  |
+|  5 | UK     |
+|  2 | Usa    |
++----+--------+
+5 rows in set (0,00 sec)
+
+#опять не вышло, не понимаю где ошибка
+
+----------------------------------------------------------------------------------
+#были еще попытки, но случайно закрыл данный файл не сохранив
+
+#посмотрев журналы, понял что не проиходит записи изменений таблиц
+
+
+Файл журнала	Позиция	Тип события	ID сервера	Исходная позиция	Информация
+bin.000031	4	Format_desc	1	124	
+Server ver: 8.0.13, Binlog ver: 4
+bin.000031	124	Previous_gtids	1	155	
+bin.000031	155	Anonymous_Gtid	1	228	
+SET @@SESSION.GTID_NEXT= 'ANONYMOUS'
+bin.000031	228	Query	1	373	
+GRANT REPLICATION SLAVE ON *.* TO 'root'@'%' /* xid=8 */
+bin.000031	373	Anonymous_Gtid	1	446	
+SET @@SESSION.GTID_NEXT= 'ANONYMOUS'
+bin.000031	446	Query	1	538	
+FLUSH PRIVILEGES
+bin.000031	538	Stop	1	561	
+
+
+
+Файл журнала	Позиция	Тип события	ID сервера	Исходная позиция	Информация
+bin.000032	4	Format_desc	1	124	
+Server ver: 8.0.13, Binlog ver: 4
+bin.000032	124	Previous_gtids	1	155	
+bin.000032	155	Anonymous_Gtid	1	228	
+SET @@SESSION.GTID_NEXT= 'ANONYMOUS'
+bin.000032	228	Query	1	373	
+GRANT REPLICATION SLAVE ON *.* TO 'root'@'%' /* xid=264 */
+bin.000032	373	Anonymous_Gtid	1	446	
+SET @@SESSION.GTID_NEXT= 'ANONYMOUS'
+bin.000032	446	Query	1	538	
+FLUSH PRIVILEGES
+bin.000032	538	Stop	1	561	
+
+
+#по наличаю времени, попробую у себя запустить сервер
+
+
+
+
+#2. Установить MongoDB и повторить запросы из методички.
+
+
+voodoo@420:~$ mongo
+MongoDB shell version v3.6.3
+connecting to: mongodb://127.0.0.1:27017
+MongoDB server version: 3.6.3
+Server has startup warnings: 
+2019-08-09T14:17:02.391+0300 I STORAGE  [initandlisten] 
+2019-08-09T14:17:02.391+0300 I STORAGE  [initandlisten] ** WARNING: Using the XFS filesystem is strongly recommended with the WiredTiger storage engine
+2019-08-09T14:17:02.391+0300 I STORAGE  [initandlisten] **          See http://dochub.mongodb.org/core/prodnotes-filesystem
+2019-08-09T14:17:02.808+0300 I CONTROL  [initandlisten] 
+2019-08-09T14:17:02.808+0300 I CONTROL  [initandlisten] ** WARNING: Access control is not enabled for the database.
+2019-08-09T14:17:02.808+0300 I CONTROL  [initandlisten] **          Read and write access to data and configuration is unrestricted.
+2019-08-09T14:17:02.808+0300 I CONTROL  [initandlisten] 
+> show dbs;
+admin   0.000GB
+config  0.000GB
+local   0.000GB
+> use august
+switched to db august
+> db.august.insert({"name":"Тарас"})
+WriteResult({ "nInserted" : 1 })
+> db.august.insert({"name":"Тарас", "ln":"Gol", "dept":"it", "sal":25000})
+WriteResult({ "nInserted" : 1 })
+> db.august.find()
+{ "_id" : ObjectId("5d4d57deb63ea25d778b1050"), "name" : "Тарас" }
+{ "_id" : ObjectId("5d4d5833b63ea25d778b1051"), "name" : "Тарас", "ln" : "Gol", "dept" : "it", "sal" : 25000 }
+> db.august.insert({"name":"Alena", "ln":"Zv", "dept":"it", "sal":35000})
+WriteResult({ "nInserted" : 1 })
+> db.august.insert({"name":"Sv", "ln":"Pv", "dept":"acc", "sal":45000})
+WriteResult({ "nInserted" : 1 })
+> db.august.find()
+{ "_id" : ObjectId("5d4d57deb63ea25d778b1050"), "name" : "Тарас" }
+{ "_id" : ObjectId("5d4d5833b63ea25d778b1051"), "name" : "Тарас", "ln" : "Gol", "dept" : "it", "sal" : 25000 }
+{ "_id" : ObjectId("5d4d586bb63ea25d778b1052"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d4d5880b63ea25d778b1053"), "name" : "Sv", "ln" : "Pv", "dept" : "acc", "sal" : 45000 }
+> db.august.insert({"name":"Andey", "ln":"Xxx", "dept":"acc", "sal":65000, "pos":"head"})
+WriteResult({ "nInserted" : 1 })
+> db.august.find()
+{ "_id" : ObjectId("5d4d57deb63ea25d778b1050"), "name" : "Тарас" }
+{ "_id" : ObjectId("5d4d5833b63ea25d778b1051"), "name" : "Тарас", "ln" : "Gol", "dept" : "it", "sal" : 25000 }
+{ "_id" : ObjectId("5d4d586bb63ea25d778b1052"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d4d5880b63ea25d778b1053"), "name" : "Sv", "ln" : "Pv", "dept" : "acc", "sal" : 45000 }
+{ "_id" : ObjectId("5d4d58aab63ea25d778b1054"), "name" : "Andey", "ln" : "Xxx", "dept" : "acc", "sal" : 65000, "pos" : "head" }
+> db.august.find({"_id" : })^C
+bye
+voodoo@420:~$ mongo
+MongoDB shell version v3.6.3
+connecting to: mongodb://127.0.0.1:27017
+MongoDB server version: 3.6.3
+Server has startup warnings: 
+2019-08-09T14:17:02.391+0300 I STORAGE  [initandlisten] 
+2019-08-09T14:17:02.391+0300 I STORAGE  [initandlisten] ** WARNING: Using the XFS filesystem is strongly recommended with the WiredTiger storage engine
+2019-08-09T14:17:02.391+0300 I STORAGE  [initandlisten] **          See http://dochub.mongodb.org/core/prodnotes-filesystem
+2019-08-09T14:17:02.808+0300 I CONTROL  [initandlisten] 
+2019-08-09T14:17:02.808+0300 I CONTROL  [initandlisten] ** WARNING: Access control is not enabled for the database.
+2019-08-09T14:17:02.808+0300 I CONTROL  [initandlisten] **          Read and write access to data and configuration is unrestricted.
+2019-08-09T14:17:02.808+0300 I CONTROL  [initandlisten] 
+> db.august.find(db.august.find({"_id" : ObjectId("5d4d57deb63ea25d778b1050")})
+... ^C
+
+> show dbs;
+admin   0.000GB
+august  0.000GB
+config  0.000GB
+local   0.000GB
+> use august
+switched to db august
+>  db.august.find(db.august.find({"_id" : ObjectId("5d4d57deb63ea25d778b1050")})
+... db.august.find({"_id" : ObjectId("5d4d57deb63ea25d778b1050")}
+... ^C
+
+> db.august.find({"_id" : ObjectId("5d4d57deb63ea25d778b1050")}
+... ^C
+
+> db.august.find({"_id" : ObjectId("5d4d57deb63ea25d778b1050")})
+{ "_id" : ObjectId("5d4d57deb63ea25d778b1050"), "name" : "Тарас" }
+> db.august.find({"name" : "Тарас")})
+2019-08-09T14:33:19.087+0300 E QUERY    [thread1] SyntaxError: missing } after property list @(shell):1:32
+> db.august.find({"name" : "Тарас"})
+{ "_id" : ObjectId("5d4d57deb63ea25d778b1050"), "name" : "Тарас" }
+{ "_id" : ObjectId("5d4d5833b63ea25d778b1051"), "name" : "Тарас", "ln" : "Gol", "dept" : "it", "sal" : 25000 }
+> db.august.find({"pos" : {$exists:true}})
+{ "_id" : ObjectId("5d4d58aab63ea25d778b1054"), "name" : "Andey", "ln" : "Xxx", "dept" : "acc", "sal" : 65000, "pos" : "head" }
+> db.august.find({"pos" : {$exists:false}})
+{ "_id" : ObjectId("5d4d57deb63ea25d778b1050"), "name" : "Тарас" }
+{ "_id" : ObjectId("5d4d5833b63ea25d778b1051"), "name" : "Тарас", "ln" : "Gol", "dept" : "it", "sal" : 25000 }
+{ "_id" : ObjectId("5d4d586bb63ea25d778b1052"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d4d5880b63ea25d778b1053"), "name" : "Sv", "ln" : "Pv", "dept" : "acc", "sal" : 45000 }
+> db.august.find({"sal" : {$gt:35000}})
+{ "_id" : ObjectId("5d4d5880b63ea25d778b1053"), "name" : "Sv", "ln" : "Pv", "dept" : "acc", "sal" : 45000 }
+{ "_id" : ObjectId("5d4d58aab63ea25d778b1054"), "name" : "Andey", "ln" : "Xxx", "dept" : "acc", "sal" : 65000, "pos" : "head" }
+> db.august.find({"sal" : {$lt:35000}})
+{ "_id" : ObjectId("5d4d5833b63ea25d778b1051"), "name" : "Тарас", "ln" : "Gol", "dept" : "it", "sal" : 25000 }
+> db.august.find({"sal" : {$in:[25000, 45000]}})
+{ "_id" : ObjectId("5d4d5833b63ea25d778b1051"), "name" : "Тарас", "ln" : "Gol", "dept" : "it", "sal" : 25000 }
+{ "_id" : ObjectId("5d4d5880b63ea25d778b1053"), "name" : "Sv", "ln" : "Pv", "dept" : "acc", "sal" : 45000 }
+> db.august.find({"name":{$regex:"^A"}})
+{ "_id" : ObjectId("5d4d586bb63ea25d778b1052"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d4d58aab63ea25d778b1054"), "name" : "Andey", "ln" : "Xxx", "dept" : "acc", "sal" : 65000, "pos" : "head" }
+> db.august.update({"name" : "Тарас"},{$set:{"sal":"45000"})
+... ^C
+
+>  db.august.update({"name" : "Тарас"},{$set:{"sal":"45000"})
+... ^C
+
+>  db.august.update({"name" : "Тарас"},{$set:{"sal":"45000"})
+... ^C
+
+> db.august.update({"name" : "Тарас"},{$set:{"sal":"45000"}})
+WriteResult({ "nMatched" : 1, "nUpserted" : 0, "nModified" : 1 })
+> db.august.find()
+{ "_id" : ObjectId("5d4d57deb63ea25d778b1050"), "name" : "Тарас", "sal" : "45000" }
+{ "_id" : ObjectId("5d4d5833b63ea25d778b1051"), "name" : "Тарас", "ln" : "Gol", "dept" : "it", "sal" : 25000 }
+{ "_id" : ObjectId("5d4d586bb63ea25d778b1052"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d4d5880b63ea25d778b1053"), "name" : "Sv", "ln" : "Pv", "dept" : "acc", "sal" : 45000 }
+{ "_id" : ObjectId("5d4d58aab63ea25d778b1054"), "name" : "Andey", "ln" : "Xxx", "dept" : "acc", "sal" : 65000, "pos" : "head" }
+> db.august.update({"name" : "Тарас"},{$set:{"sal":"45000"}},true,true)
+WriteResult({ "nMatched" : 2, "nUpserted" : 0, "nModified" : 1 })
+> db.august.find()
+{ "_id" : ObjectId("5d4d57deb63ea25d778b1050"), "name" : "Тарас", "sal" : "45000" }
+{ "_id" : ObjectId("5d4d5833b63ea25d778b1051"), "name" : "Тарас", "ln" : "Gol", "dept" : "it", "sal" : "45000" }
+{ "_id" : ObjectId("5d4d586bb63ea25d778b1052"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d4d5880b63ea25d778b1053"), "name" : "Sv", "ln" : "Pv", "dept" : "acc", "sal" : 45000 }
+{ "_id" : ObjectId("5d4d58aab63ea25d778b1054"), "name" : "Andey", "ln" : "Xxx", "dept" : "acc", "sal" : 65000, "pos" : "head" }
+> db.august.update({"name" : "Тарас"},{$unset:{"sal":"45000"}},true,true)
+WriteResult({ "nMatched" : 2, "nUpserted" : 0, "nModified" : 2 })
+> db.august.find()
+{ "_id" : ObjectId("5d4d57deb63ea25d778b1050"), "name" : "Тарас" }
+{ "_id" : ObjectId("5d4d5833b63ea25d778b1051"), "name" : "Тарас", "ln" : "Gol", "dept" : "it" }
+{ "_id" : ObjectId("5d4d586bb63ea25d778b1052"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d4d5880b63ea25d778b1053"), "name" : "Sv", "ln" : "Pv", "dept" : "acc", "sal" : 45000 }
+{ "_id" : ObjectId("5d4d58aab63ea25d778b1054"), "name" : "Andey", "ln" : "Xxx", "dept" : "acc", "sal" : 65000, "pos" : "head" }
+> db.august.update({"name" : "Тарас"},{$rename:{"sal":"salary"}},true,true)
+WriteResult({ "nMatched" : 2, "nUpserted" : 0, "nModified" : 0 })
+> db.august.find()
+{ "_id" : ObjectId("5d4d57deb63ea25d778b1050"), "name" : "Тарас" }
+{ "_id" : ObjectId("5d4d5833b63ea25d778b1051"), "name" : "Тарас", "ln" : "Gol", "dept" : "it" }
+{ "_id" : ObjectId("5d4d586bb63ea25d778b1052"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d4d5880b63ea25d778b1053"), "name" : "Sv", "ln" : "Pv", "dept" : "acc", "sal" : 45000 }
+{ "_id" : ObjectId("5d4d58aab63ea25d778b1054"), "name" : "Andey", "ln" : "Xxx", "dept" : "acc", "sal" : 65000, "pos" : "head" }
+> db.august.update({"name" : "Sv"},{$rename:{"sal":"salary"}},true,true)
+WriteResult({ "nMatched" : 1, "nUpserted" : 0, "nModified" : 1 })
+> db.august.find()
+{ "_id" : ObjectId("5d4d57deb63ea25d778b1050"), "name" : "Тарас" }
+{ "_id" : ObjectId("5d4d5833b63ea25d778b1051"), "name" : "Тарас", "ln" : "Gol", "dept" : "it" }
+{ "_id" : ObjectId("5d4d586bb63ea25d778b1052"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d4d5880b63ea25d778b1053"), "name" : "Sv", "ln" : "Pv", "dept" : "acc", "salary" : 45000 }
+{ "_id" : ObjectId("5d4d58aab63ea25d778b1054"), "name" : "Andey", "ln" : "Xxx", "dept" : "acc", "sal" : 65000, "pos" : "head" }
+> db.august.remove({})^C
+bye
+voodoo@420:~$ mongo
+MongoDB shell version v3.6.3
+connecting to: mongodb://127.0.0.1:27017
+MongoDB server version: 3.6.3
+Server has startup warnings: 
+2019-08-09T14:17:02.391+0300 I STORAGE  [initandlisten] 
+2019-08-09T14:17:02.391+0300 I STORAGE  [initandlisten] ** WARNING: Using the XFS filesystem is strongly recommended with the WiredTiger storage engine
+2019-08-09T14:17:02.391+0300 I STORAGE  [initandlisten] **          See http://dochub.mongodb.org/core/prodnotes-filesystem
+2019-08-09T14:17:02.808+0300 I CONTROL  [initandlisten] 
+2019-08-09T14:17:02.808+0300 I CONTROL  [initandlisten] ** WARNING: Access control is not enabled for the database.
+2019-08-09T14:17:02.808+0300 I CONTROL  [initandlisten] **          Read and write access to data and configuration is unrestricted.
+2019-08-09T14:17:02.808+0300 I CONTROL  [initandlisten] 
+> use august
+switched to db august
+> db.august.remove({"_id" : ObjectId("5d4d57deb63ea25d778b1050")})
+WriteResult({ "nRemoved" : 1 })
+> db.august.find()
+{ "_id" : ObjectId("5d4d5833b63ea25d778b1051"), "name" : "Тарас", "ln" : "Gol", "dept" : "it" }
+{ "_id" : ObjectId("5d4d586bb63ea25d778b1052"), "name" : "Alena", "ln" : "Zv", "dept" : "it", "sal" : 35000 }
+{ "_id" : ObjectId("5d4d5880b63ea25d778b1053"), "name" : "Sv", "ln" : "Pv", "dept" : "acc", "salary" : 45000 }
+{ "_id" : ObjectId("5d4d58aab63ea25d778b1054"), "name" : "Andey", "ln" : "Xxx", "dept" : "acc", "sal" : 65000, "pos" : "head" }
+> db.august.find().pretty
+function () {
+    this._prettyShell = true;
+    return this;
+}
+> db.august.find().pretty()
+{
+	"_id" : ObjectId("5d4d5833b63ea25d778b1051"),
+	"name" : "Тарас",
+	"ln" : "Gol",
+	"dept" : "it"
+}
+{
+	"_id" : ObjectId("5d4d586bb63ea25d778b1052"),
+	"name" : "Alena",
+	"ln" : "Zv",
+	"dept" : "it",
+	"sal" : 35000
+}
+{
+	"_id" : ObjectId("5d4d5880b63ea25d778b1053"),
+	"name" : "Sv",
+	"ln" : "Pv",
+	"dept" : "acc",
+	"salary" : 45000
+}
+{
+	"_id" : ObjectId("5d4d58aab63ea25d778b1054"),
+	"name" : "Andey",
+	"ln" : "Xxx",
+	"dept" : "acc",
+	"sal" : 65000,
+	"pos" : "head"
+}
+> db.august.drop
+function () {
+    if (arguments.length > 0)
+        throw Error("drop takes no argument");
+    var ret = this._db.runCommand({drop: this.getName()});
+    if (!ret.ok) {
+        if (ret.errmsg == "ns not found")
+            return false;
+        throw _getErrorWithCode(ret, "drop failed: " + tojson(ret));
+    }
+    return true;
+}
+> db.august.drop()
+true
+> show dbs
+admin   0.000GB
+config  0.000GB
+local   0.000GB
+
+
+> use cities
+switched to db cities
+> db.cities.insert({"city": "Kazan", "country":"Russia"})
+WriteResult({ "nInserted" : 1 })
+> db.cities.find()
+{ "_id" : ObjectId("5d4d630d588751e9a3d9980e"), "city" : "Kazan", "country" : "Russia" }
+> db.cities.insert({"city": "Moscow", "country":"Russia"})
+WriteResult({ "nInserted" : 1 })
+> db.cities.insert({"city": "Barcelona", "country":"Spain"})
+WriteResult({ "nInserted" : 1 })
+> db.cities.insert({"city": "Madrid", "country":"Spain"})
+WriteResult({ "nInserted" : 1 })
+> db.cities.insert({"city": "New York", "country":"USA"})
+WriteResult({ "nInserted" : 1 })
+> db.cities.find()
+{ "_id" : ObjectId("5d4d630d588751e9a3d9980e"), "city" : "Kazan", "country" : "Russia" }
+{ "_id" : ObjectId("5d4d6322588751e9a3d9980f"), "city" : "Moscow", "country" : "Russia" }
+{ "_id" : ObjectId("5d4d6334588751e9a3d99810"), "city" : "Barcelona", "country" : "Spain" }
+{ "_id" : ObjectId("5d4d633c588751e9a3d99811"), "city" : "Madrid", "country" : "Spain" }
+{ "_id" : ObjectId("5d4d634b588751e9a3d99812"), "city" : "New York", "country" : "USA" }
+> db.cities.find({"_id" : ObjectId("5d4d633c588751e9a3d99811")})
+{ "_id" : ObjectId("5d4d633c588751e9a3d99811"), "city" : "Madrid", "country" : "Spain" }
+
+> db.cities.update({"_id" : ObjectId("5d4d630d588751e9a3d9980e")},{$set:{"region":"Tatarstan"}})
+WriteResult({ "nMatched" : 1, "nUpserted" : 0, "nModified" : 1 })
+> db.cities.find()
+{ "_id" : ObjectId("5d4d630d588751e9a3d9980e"), "city" : "Kazan", "country" : "Russia", "region" : "Tatarstan" }
+{ "_id" : ObjectId("5d4d6322588751e9a3d9980f"), "city" : "Moscow", "country" : "Russia" }
+{ "_id" : ObjectId("5d4d6334588751e9a3d99810"), "city" : "Barcelona", "country" : "Spain" }
+{ "_id" : ObjectId("5d4d633c588751e9a3d99811"), "city" : "Madrid", "country" : "Spain" }
+{ "_id" : ObjectId("5d4d634b588751e9a3d99812"), "city" : "New York", "country" : "USA" }
+
+> db.cities.find({"country":"Russia"})
+{ "_id" : ObjectId("5d4d630d588751e9a3d9980e"), "city" : "Kazan", "country" : "Russia", "region" : "Tatarstan" }
+{ "_id" : ObjectId("5d4d6322588751e9a3d9980f"), "city" : "Moscow", "country" : "Russia" }
+
+> db.cities.remove({"city":"Kazan"})
+WriteResult({ "nRemoved" : 1 })
+> db.cities.find()
+{ "_id" : ObjectId("5d4d6322588751e9a3d9980f"), "city" : "Moscow", "country" : "Russia" }
+{ "_id" : ObjectId("5d4d6334588751e9a3d99810"), "city" : "Barcelona", "country" : "Spain" }
+{ "_id" : ObjectId("5d4d633c588751e9a3d99811"), "city" : "Madrid", "country" : "Spain" }
+{ "_id" : ObjectId("5d4d634b588751e9a3d99812"), "city" : "New York", "country" : "USA" }
+
+> db.cities.drop()
+true
