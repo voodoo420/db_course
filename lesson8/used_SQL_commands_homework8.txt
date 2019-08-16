@@ -1,0 +1,70 @@
+#Урок 8. Альтернативные СуБД и функциональные надстройки
+
+#1. Установить и запустить СУБД PostgreSQL.
+
+postgres=# \l
+postgres=# \du
+postgres=# ALTER USER postgres WITH PASSWORD '123123';
+ALTER ROLE
+postgres=# CREATE USER voodoo WITH PASSWORD '123123';
+CREATE ROLE
+postgres=# ALTER USER voodoo WITH SUPERUSER;
+ALTER ROLE
+postgres=# \du
+                                   List of roles
+ Role name |                         Attributes                         | Member of 
+-----------+------------------------------------------------------------+-----------
+ postgres  | Superuser, Create role, Create DB, Replication, Bypass RLS | {}
+ voodoo    | Superuser                                                  | {}
+
+(END)
+
+
+CREATE SCHEMA cities;
+SET search_path TO cities;
+
+CREATE TABLE countries (
+id serial,
+country varchar(50),
+cities text[]
+);
+
+SELECT * FROM countries;
+
+INSERT INTO countries VALUES
+ (1, 'Russia','{"Kazan", "Moscow", "Saint-Petersburg"}'),
+ (2, 'USA', '{"New York", "San Francisco", "Los Angeles"}'),
+ (3, 'Spain', '{"Barcelona", "Madrid", "Ibiza"}');
+
+SELECT cities[1] FROM countries WHERE id = 1;
+
+DROP TABLE countries;
+
+
+CREATE TYPE city AS (  
+     city_county varchar(50),
+     city_region varchar(50)
+     );
+
+CREATE TABLE _cities (
+    id serial,
+    city varchar(50),
+    info city
+);
+
+INSERT INTO _cities VALUES
+	(1, 'Kazan', ROW ('Russia', 'Tatarstan')),
+	(2, 'Moscow', ROW ('Russia', 'Moscow region')),
+	(3,'Madrid', ROW ('Spain', 'Madrid')),
+	(4,'New Youk', ROW ('USA', 'New York'));
+
+SELECT * FROM _cities;
+
+INSERT INTO _cities VALUES (5, 'Zainsk', ROW ('Russia', 'Tatarstan'));
+
+SELECT city FROM _cities WHERE (info).city_region = 'Tatarstan';
+	
+
+# 2. *Установить и запустить Sphinx. Проверить его работоспособность.
+
+#не устанавливал
