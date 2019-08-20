@@ -1,0 +1,271 @@
+№Задачи к собеседованию
+#Задача 1. У вас есть социальная сеть, где пользователи (id, имя) могут ставить друг другу лайки. Создайте необходимые таблицы для хранения данной информации. Создайте запрос, который выведет информацию:
+#id пользователя;
+#имя;
+#лайков получено;
+#лайков поставлено;
+#взаимные лайки.
+#Задача 2. Для структуры из задачи 1 выведите список всех пользователей, которые поставили лайк пользователям A и B (id задайте произвольно), но при этом не поставили лайк пользователю C.
+#Задача 3. Добавим сущности «Фотография» и «Комментарии к фотографии». Нужно создать функционал для пользователей, который позволяет ставить лайки не только пользователям, но и фото или комментариям к фото. Учитывайте следующие ограничения:
+#пользователь не может дважды лайкнуть одну и ту же сущность;
+#пользователь имеет право отозвать лайк;
+#необходимо иметь возможность считать число полученных сущностью лайков и выводить список пользователей, поставивших лайки;
+#в будущем могут появиться новые виды сущностей, которые можно лайкать.
+
+
+#решение
+#на данный момент соц. сеть предусматривает только профиль, фото и комментарий к ней.
+
+#процедура `info` выводит информацию о пользователе
+#первый параметр процедуры - id пользователя, о котором нужна информация, второй - id второго пользователя для учета лайков
+#если одно из полей пустое, не выводит ничего, пока не починил
+
+#процедура `like` добавлет лайк, повторный лайк предотвращает уникальное поле "псевдохэш"
+#так же по данному псевдохэшу можно узнать кому, кто и за что =)
+#думал использовать его по ходу решения задачи, но не придумал как
+
+#сущность и количество лайков
+SELECT `entities`.`name`, `likes`.`to_id` AS `owner`, `users`.`user` AS `from`
+FROM `likes` 
+INNER JOIN `entities` ON `likes`.`entity_id` = `entities`.`id`
+INNER JOIN `users` ON `likes`.`from_id` = `users`.`id`
+WHERE `entity_id` = 1 AND `to_id` = 3;
+
+#пользователи, поставившие лайки 1 и 2, но не поставившие 3
+SELECT DISTINCT `likes`.`from_id` AS `id`, `users`.`user` FROM `likes` 
+INNER JOIN `users` ON `likes`.`from_id` = `users`.`id`
+WHERE `likes`.`from_id` IN (SELECT `likes`.`from_id` FROM `likes` WHERE `likes`.`to_id` = 1) 
+AND `likes`.`from_id` IN (SELECT `likes`.`from_id` FROM `likes` WHERE `likes`.`to_id` = 2)
+AND `likes`.`from_id` NOT IN (SELECT `likes`.`from_id` FROM `likes` WHERE `likes`.`from_id` 
+IN (SELECT `likes`.`from_id` FROM `likes` WHERE `likes`.`to_id` = 3));
+
+
+CREATE SCHEMA IF NOT EXISTS `likes` 
+DEFAULT CHAR SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+USE likes;
+
+CREATE TABLE IF NOT EXISTS `users` (
+`id` INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+`user` VARCHAR(35) NOT NULL
+) DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+INSERT INTO `users`(`user`) VALUES ('user1'), ('user2'), ('user3');
+
+CREATE TABLE IF NOT EXISTS `likes` (
+`id` INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+`from` VARCHAR(35) NOT NULL,
+`to` VARCHAR(35) NOT NULL,
+`entity` int NOT NULL
+) DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+ALTER TABLE `likes`.`likes` 
+ADD COLUMN `pseudo_hash` FLOAT NOT NULL AFTER `entity_id`,
+CHANGE COLUMN `from` `from_id` VARCHAR(35) NOT NULL ,
+CHANGE COLUMN `to` `to_id` VARCHAR(35) NOT NULL ,
+CHANGE COLUMN `entity` `entity_id` INT(11) NOT NULL ,
+ADD UNIQUE INDEX `pseudo_hash_UNIQUE` (`pseudo_hash` ASC) VISIBLE;
+
+CREATE TABLE IF NOT EXISTS `entities` (
+`id` INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+`name` VARCHAR(35) NOT NULL
+) DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+INSERT INTO `likes`.`entities` (`name`) VALUES ('Profile');
+INSERT INTO `likes`.`entities` (`name`) VALUES ('Photo');
+INSERT INTO `likes`.`entities` (`name`) VALUES ('Comment');
+
+ALTER TABLE `likes` 
+ADD CONSTRAINT `entity_fk` FOREIGN KEY (`entity_id`)
+REFERENCES `entities`(`id`)
+ON UPDATE CASCADE
+ON DELETE RESTRICT;
+
+ALTER TABLE `likes`.`likes` 
+CHANGE COLUMN `from_id` `from_id` INT(11) NOT NULL,
+CHANGE COLUMN `to_id` `to_id` INT(11) NOT NULL;
+
+ALTER TABLE `likes` 
+ADD CONSTRAINT `from_fk` FOREIGN KEY (`from_id`)
+REFERENCES `users`(`id`)
+ON UPDATE CASCADE
+ON DELETE RESTRICT;
+
+ALTER TABLE `likes` 
+ADD CONSTRAINT `to_fk` FOREIGN KEY (`to_id`)
+REFERENCES `users`(`id`)
+ON UPDATE CASCADE
+ON DELETE RESTRICT;
+
+CREATE PROCEDURE `like` (from_id int(11), to_id int(11), entity int(11))
+DETERMINISTIC
+READS SQL DATA
+INSERT INTO `likes` (`from_id`,`to_id`,`entity_id`, `pseudo_hash`, `date`) VALUES (from_id, to_id, entity, (to_id*10 + entity), NOW());
+
+CALL `like` (1,2,3);
+
+
+USE `likes`;
+DROP procedure IF EXISTS `like`;
+
+DELIMITER $$
+USE `likes`$$
+CREATE DEFINER=`root`@`%` PROCEDURE `like`(from_id int(11), to_id int(11), entity int(11))
+    READS SQL DATA
+    DETERMINISTIC
+INSERT INTO `likes` (`from_id`,`to_id`,`entity_id`, `pseudo_hash`, `date`) VALUES (from_id, to_id, entity,((to_id*10 + entity) * (from_id*0.1)),CURRENT_TIMESTAMP)$$
+
+DELIMITER ;
+
+CALL `like` (1,2,1);
+
+DELETE FROM `likes` WHERE `id` = 1;
+DELETE FROM `likes` WHERE `id` = 2;
+
+ALTER TABLE `likes`.`likes` 
+DROP COLUMN `date`;
+
+ALTER TABLE `likes`.`likes` 
+ADD COLUMN `date` TIMESTAMP NULL AFTER `pseudo_hash`;
+
+CALL `like` (1,2,1);
+CALL `like` (1,3,1);
+CALL `like` (3,1,2);
+CALL `like` (3,1,3);
+
+
+USE `likes`;
+DROP procedure IF EXISTS `like`;
+
+DELIMITER $$
+USE `likes`$$
+CREATE DEFINER=`root`@`%` PROCEDURE `like`(from_id int(11), to_id int(11), entity int(11))
+    READS SQL DATA
+    DETERMINISTIC
+INSERT INTO `likes` (`from_id`,`to_id`,`entity_id`, `pseudo_hash`, `date`) VALUES (from_id, to_id, entity, (to_id+(0.1*from_id)+(0.00001*entity)),CURRENT_TIMESTAMP)$$
+
+DELIMITER ;
+
+DELETE FROM `likes` WHERE `id` >= 0;
+
+CALL `like` (1,2,1);
+CALL `like` (1,3,1);
+CALL `like` (3,1,2);
+CALL `like` (3,1,3);
+CALL `like` (2,1,1);
+CALL `like` (2,3,1);
+CALL `like` (3,2,1);
+
+USE `likes`;
+DROP procedure IF EXISTS `like`;
+
+DELIMITER $$
+USE `likes`$$
+CREATE DEFINER=`root`@`%` PROCEDURE `like`(from_id int(11), to_id int(11), entity int(11))
+    READS SQL DATA
+    DETERMINISTIC
+INSERT INTO `likes` (`from_id`,`to_id`,`entity_id`, `pseudo_hash`, `date`) VALUES (from_id, to_id, entity, (to_id+(0.1*entity)+(0.01*from_id)),CURRENT_TIMESTAMP)$$
+
+DELIMITER ;
+
+DELETE FROM `likes` WHERE `id` >= 0;
+
+CALL `like` (1,2,1);
+CALL `like` (1,3,1);
+CALL `like` (3,1,2);
+CALL `like` (3,1,3);
+CALL `like` (2,1,1);
+CALL `like` (2,3,1);
+CALL `like` (3,2,1);
+
+DELIMITER $$
+CREATE PROCEDURE `info` (user_id int(11))
+BEGIN
+SET @a = (SELECT COUNT(*) FROM `likes` WHERE `to_id` = user_id);
+SET @b = (SELECT COUNT(*) FROM `likes` WHERE `from_id` = user_id);
+SELECT `likes`.`to_id` AS `id`, `users`.`user`, 
+@a AS `reseived`, @b AS `puted` FROM `likes`
+INNER JOIN `users` ON `likes`.`to_id` = `users`.`id`
+WHERE `likes`.`to_id` = user_id ORDER BY `id` DESC LIMIT 1;
+END $$
+DELIMITER ;
+
+CALL `info` (3);
+
+SELECT `entities`.`name`, `likes`.`to_id` AS `owner`, `users`.`user` AS `from`
+FROM `likes` 
+INNER JOIN `entities` ON `likes`.`entity_id` = `entities`.`id`
+INNER JOIN `users` ON `likes`.`from_id` = `users`.`id`
+WHERE `entity_id` = 1 AND `to_id` = 3;
+
+USE `likes`;
+DROP procedure IF EXISTS `info`;
+
+DELIMITER $$
+USE `likes`$$
+CREATE DEFINER=`root`@`%` PROCEDURE `info`(user_id int(11), second_id int(11))
+BEGIN
+SET @a = (SELECT COUNT(*) FROM `likes` WHERE `to_id` = user_id);
+SET @b = (SELECT COUNT(*) FROM `likes` WHERE `from_id` = user_id);
+SET @c = (SELECT COUNT(*) FROM `likes` WHERE `to_id` = user_id AND `from_id` = second_id);
+SET @d = (SELECT COUNT(*) FROM `likes` WHERE `to_id` = user_id AND `from_id` = second_id);
+SELECT `likes`.`to_id` AS `id`, `users`.`user`, 
+@a AS `reseived`, @b AS `puted`,@c AS `from userX`, @d AS `to userx`
+FROM `likes`
+INNER JOIN `users` ON `likes`.`to_id` = `users`.`id`
+WHERE `likes`.`to_id` = user_id ORDER BY `id` DESC LIMIT 1;
+END$$
+
+DELIMITER ;
+
+CALL `info` (1,2);
+
+INSERT INTO `users`(`user`) VALUES ('user4');
+
+CALL `like` (4,1,2);
+CALL `like` (4,2,2);
+CALL `like` (4,1,2);
+
+
+USE `likes`;
+DROP procedure IF EXISTS `info`;
+
+DELIMITER $$
+USE `likes`$$
+CREATE DEFINER=`root`@`%` PROCEDURE `info`(user_id int(11), second_id int(11))
+BEGIN
+SET @a = (SELECT COUNT(*) FROM `likes` WHERE `to_id` = user_id);
+SET @b = (SELECT COUNT(*) FROM `likes` WHERE `from_id` = user_id);
+SET @c = (SELECT COUNT(*) FROM `likes` WHERE `to_id` = user_id AND `from_id` = second_id);
+SET @d = (SELECT COUNT(*) FROM `likes` WHERE `to_id` = user_id AND `from_id` = second_id);
+SELECT DISTINCT `likes`.`to_id` AS `id`, `users`.`user`, 
+@a AS `reseived`, @b AS `puted`,@c AS `from userX`, @d AS `to userx`
+FROM `likes`
+INNER JOIN `users` ON `likes`.`to_id` = `users`.`id`
+WHERE `likes`.`to_id` = user_id;
+END$$
+
+
+DELIMITER $$
+CREATE PROCEDURE `check_likes`(user_one int(11), user_two int(11), user_three int(11))
+BEGIN
+SET @a = (SELECT `from_id` FROM `likes` WHERE `to_id` = user_one);
+SET @b = (SELECT `from_id` FROM `likes` WHERE `to_id` = user_two);
+SET @c = (SELECT `from_id` FROM `likes` WHERE `to_id` = user_three);
+SELECT DISTINCT `from_id` FROM `likes` WHERE `from_id` IN (@a) AND `from_id` IN (@b)
+AND `from_id` NOT IN (SELECT `from_id` FROM `likes` WHERE `from_id` IN (@c));
+END$$
+DELIMITER ;
+
+CALL `check_likes` (1,2,3);
+
+#14:42:12	CALL `check_likes` (1,2,3)	Error Code: 1242. Subquery returns more than 1 row	0,0011 sec
+
+DROP procedure IF EXISTS `check_likes`;
+
+SELECT DISTINCT `likes`.`from_id` AS `id`, `users`.`user` FROM `likes` 
+INNER JOIN `users` ON `likes`.`from_id` = `users`.`id`
+WHERE `likes`.`from_id` IN (SELECT `likes`.`from_id` FROM `likes` WHERE `likes`.`to_id` = 1) 
+AND `likes`.`from_id` IN (SELECT `likes`.`from_id` FROM `likes` WHERE `likes`.`to_id` = 2)
+AND `likes`.`from_id` NOT IN (SELECT `likes`.`from_id` FROM `likes` WHERE `likes`.`from_id` 
+IN (SELECT `likes`.`from_id` FROM `likes` WHERE `likes`.`to_id` = 3));
